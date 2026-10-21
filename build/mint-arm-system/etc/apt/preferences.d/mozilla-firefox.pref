@@ -1,0 +1,4 @@
+# Firefox comes from Mozilla (native arm64 build). Ubuntu's own "firefox" is a snap wrapper.
+Package: *
+Pin: origin packages.mozilla.org
+Pin-Priority: 1000

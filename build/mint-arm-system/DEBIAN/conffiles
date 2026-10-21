@@ -1,0 +1,4 @@
+/etc/firefox/policies/policies.json
+/etc/apt/sources.list.d/mozilla.list
+/etc/apt/preferences.d/mozilla-firefox.pref
+/etc/apt/preferences.d/mint-arm-nosnap.pref

@@ -1,0 +1,40 @@
+name: check
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zsh
+        run: sudo apt-get install -y -qq zsh > /dev/null
+      - name: Shell syntax
+        run: |
+          for f in build/10-packages.sh build/15-mintarm.sh build/20-rootfs.sh build/30-iso.sh build/lib.sh; do bash -n "$f"; done
+          for f in build.sh build/00-build-vm.sh build/40-vm-image.sh tools/*.sh; do zsh -n "$f"; done
+      - name: ShellCheck (stages that run in the build VM)
+        run: shellcheck --severity=error build/10-packages.sh build/15-mintarm.sh build/20-rootfs.sh build/30-iso.sh build/lib.sh
+      - name: Python syntax
+        run: python3 -m py_compile build/*.py tools/*.py
+      - name: UTM template is a valid property list
+        run: |
+          sed -e 's/@NAME@/Test/' -e 's/@VM_UUID@/U1/' -e 's/@DISK_ID@/D1/' -e 's/@CD_ID@/C1/' -e 's/@MAC@/52:54:00:00:00:01/' \
+            build/utm-config.plist.in > /tmp/config.plist
+          python3 -c 'import plistlib; plistlib.load(open("/tmp/config.plist", "rb"))'
+      - name: The settings package builds
+        run: |
+          cp -a build/mint-arm-system /tmp/mint-arm-system
+          chmod -R go-w /tmp/mint-arm-system
+          dpkg-deb --root-owner-group --build /tmp/mint-arm-system /tmp/ > /dev/null
+          dpkg-deb --info /tmp/mint-arm-system_*.deb | grep -E 'Package|Version'
+      - name: The UTM launcher compiles
+        run: cc -fsyntax-only -Wall tools/utm-qemu.c
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: zsh syntax
+        run: for f in build.sh build/00-build-vm.sh build/40-vm-image.sh tools/*.sh; do zsh -n "$f"; done
+      - name: The test tools compile
+        run: |
+          swiftc -typecheck tools/vzvm.swift
+          clang -fsyntax-only -Wall tools/utm-qemu.c

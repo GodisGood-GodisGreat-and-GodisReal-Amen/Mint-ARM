@@ -1,0 +1,17 @@
+--- a/usr/lib/linuxmint/mintUpdate/checkAPT.py
++++ b/usr/lib/linuxmint/mintUpdate/checkAPT.py
+@@ -61,6 +61,14 @@
+         _metas = [s for s in self.cache.keys() if s.startswith(lts_meta_name)]
+         if CONFIGURED_KERNEL_TYPE == "-generic":
+             _metas.append("linux-virtual")
++            # Linux Mint ARM installs its kernel through a metapackage this check does not know
++            # (the "virtual" one: the generic kernel without the firmware for physical hardware):
++            # count such a metapackage when it is installed, so no other kernel line is offered.
++            _metas += [s for s in self.cache.keys()
++                       if s.startswith(("linux-virtual", "linux-image-virtual", "linux-image-generic"))
++                       and self.cache[s].is_installed]
++        # Never offer a 64k-page kernel (arm64): Apple silicon cannot start one.
++        _metas = [s for s in _metas if "-64k" not in s]
+         global meta_names
+         for meta in _metas:
+             shortname = meta.split(":")[0]

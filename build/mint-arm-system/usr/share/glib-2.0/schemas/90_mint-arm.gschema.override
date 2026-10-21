@@ -1,0 +1,3 @@
+# Linux Mint mirrors carry no arm64 packages; don't suggest switching to one.
+[com.linuxmint.updates]
+default-repo-is-ok=true

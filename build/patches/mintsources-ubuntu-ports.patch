@@ -1,0 +1,110 @@
+diff -urN a/usr/lib/linuxmint/mintSources/mintSources.py b/usr/lib/linuxmint/mintSources/mintSources.py
+--- a/usr/lib/linuxmint/mintSources/mintSources.py
++++ b/usr/lib/linuxmint/mintSources/mintSources.py
+@@ -59,6 +59,18 @@
+ 
+ os.umask(0o022)
+ 
++# Ubuntu publishes every architecture other than amd64 and i386 on ports.ubuntu.com
++# ("ubuntu-ports"), including its security updates.
++DPKG_ARCH = subprocess.getoutput("dpkg --print-architecture").strip()
++USE_UBUNTU_PORTS = DPKG_ARCH not in ("amd64", "i386")
++UBUNTU_PORTS_MIRROR = "http://ports.ubuntu.com/ubuntu-ports"
++UBUNTU_PORTS_MIRRORS_FILE = "/usr/share/mintsources/ubuntu-ports.mirrors"
++
++def adjust_for_ubuntu_ports(template):
++    if USE_UBUNTU_PORTS:
++        template = template.replace("http://security.ubuntu.com/ubuntu/", UBUNTU_PORTS_MIRROR + "/")
++    return template
++
+ def signal_handler(signum, _):
+     print("")
+     sys.exit(128 + signum)
+@@ -635,7 +647,7 @@
+             up_to_date = False
+ 
+             if self.is_base:
+-                test_url = "%s/dists/%s/main/binary-amd64/Packages.gz" % (url, self.codename)
++                test_url = "%s/dists/%s/main/binary-%s/Packages.gz" % (url, self.codename, DPKG_ARCH)
+                 up_to_date = self.check_base_mirror_up_to_date("%s/ls-lR.gz" % url)
+             else:
+                 test_url = "%s/dists/%s/main/Contents-amd64.gz" % (url, self.codename)
+@@ -882,6 +894,10 @@
+                 for param in config_parser.options(section):
+                     self.config[section][param] = config_parser.get(section, param)
+ 
++        if USE_UBUNTU_PORTS and "ubuntu" in self.config["mirrors"]["base_default"]:
++            self.config["mirrors"]["base_default"] = UBUNTU_PORTS_MIRROR
++            self.config["mirrors"]["base_mirrors"] = UBUNTU_PORTS_MIRRORS_FILE
++
+         if self.config["general"]["use_ppas"] == "false":
+             self.builder.get_object("main_stack").remove(self.builder.get_object("ppas_page"))
+ 
+@@ -1068,7 +1084,7 @@
+                     country_code = line.split(":")[1]
+                 else:
+                     if country_code is not None:
+-                        if ("ubuntu-ports" not in line):
++                        if ("ubuntu-ports" not in line) or USE_UBUNTU_PORTS:
+                             elements = line.split(" ")
+                             url = elements[0]
+                             if len(elements) > 1:
+@@ -1753,6 +1769,7 @@
+         template = template.replace("$optionalcomponents", ' '.join(selected_components))
+         template = template.replace("$mirror", self.selected_mirror)
+         template = template.replace("$basemirror", self.selected_base_mirror)
++        template = adjust_for_ubuntu_ports(template)
+ 
+         with open("/etc/apt/sources.list.d/official-package-repositories.list", "w", encoding="utf-8", errors="ignore") as text_file:
+             text_file.write(template)
+@@ -1766,6 +1783,7 @@
+             template = template.replace("$optionalcomponents", ' '.join(selected_components))
+             template = template.replace("$mirror", self.selected_mirror)
+             template = template.replace("$basemirror", self.selected_base_mirror)
++            template = adjust_for_ubuntu_ports(template)
+             with open("/etc/apt/sources.list.d/official-source-repositories.list", "w", encoding="utf-8", errors="ignore") as text_file:
+                 text_file.write(template)
+ 
+@@ -1778,6 +1796,7 @@
+             template = template.replace("$optionalcomponents", ' '.join(selected_components))
+             template = template.replace("$mirror", self.selected_mirror)
+             template = template.replace("$basemirror", self.selected_base_mirror)
++            template = adjust_for_ubuntu_ports(template)
+             with open("/etc/apt/sources.list.d/official-dbgsym-repositories.list", "w", encoding="utf-8", errors="ignore") as text_file:
+                 text_file.write(template)
+ 
+@@ -1794,6 +1813,7 @@
+         template = template.replace("$optionalcomponents", '')
+         template = template.replace("$mirror", self.config["mirrors"]["default"])
+         template = template.replace("$basemirror", self.config["mirrors"]["base_default"])
++        template = adjust_for_ubuntu_ports(template)
+ 
+         with open("/etc/apt/sources.list.d/official-package-repositories.list", "w", encoding="utf-8", errors="ignore") as text_file:
+             text_file.write(template)
+diff -urN a/usr/share/mintsources/ubuntu-ports.mirrors b/usr/share/mintsources/ubuntu-ports.mirrors
+--- a/usr/share/mintsources/ubuntu-ports.mirrors
++++ b/usr/share/mintsources/ubuntu-ports.mirrors
+@@ -0,0 +1,23 @@
++#LOC:GB
++http://ports.ubuntu.com/ubuntu-ports/
++#LOC:FR
++http://fr.ports.ubuntu.com/ubuntu-ports/
++#LOC:DE
++http://de.ports.ubuntu.com/ubuntu-ports/
++http://ftp.tu-chemnitz.de/pub/linux/ubuntu-ports/
++#LOC:NL
++https://mirror.nl.leaseweb.net/ubuntu-ports/
++#LOC:DK
++https://mirrors.dotsrc.org/ubuntu-ports/
++#LOC:RU
++http://mirror.yandex.ru/ubuntu-ports/
++#LOC:US
++http://us.ports.ubuntu.com/ubuntu-ports/
++https://mirrors.ocf.berkeley.edu/ubuntu-ports/
++#LOC:CA
++https://mirror.csclub.uwaterloo.ca/ubuntu-ports/
++#LOC:CN
++https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/
++https://mirrors.ustc.edu.cn/ubuntu-ports/
++#LOC:AU
++https://mirror.aarnet.edu.au/pub/ubuntu/ports/

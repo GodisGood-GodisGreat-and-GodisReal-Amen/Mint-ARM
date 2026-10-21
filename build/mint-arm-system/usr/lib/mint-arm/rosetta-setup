@@ -1,0 +1,35 @@
+#!/bin/sh
+# Run x86-64 Linux programs through Apple's Rosetta when this VM runs under Apple's
+# Virtualization framework with the Rosetta share enabled (in UTM: Apple Virtualization
+# backend, "Enable Rosetta (x86_64 Emulation)"). The share appears as the virtio-fs tag "rosetta".
+set -e
+modprobe -q virtiofs 2>/dev/null || true
+# Is there a virtio-fs device at all (virtio device ID 26)? Kernels 6.9 and later also list the
+# tags in /sys/fs/virtiofs; on older ones the mount itself tells.
+found=
+for device in /sys/bus/virtio/devices/*/device; do
+    [ "$(cat "$device" 2>/dev/null)" = 0x001a ] && found=1
+done
+[ -n "$found" ] || exit 0
+if [ -d /sys/fs/virtiofs ]; then
+    found=
+    for tag in /sys/fs/virtiofs/*/tag; do
+        [ -r "$tag" ] && [ "$(cat "$tag")" = rosetta ] && found=1
+    done
+    [ -n "$found" ] || exit 0
+fi
+mkdir -p /run/rosetta
+mountpoint -q /run/rosetta || mount -t virtiofs -o ro rosetta /run/rosetta 2>/dev/null || exit 0
+[ -x /run/rosetta/rosetta ] || exit 0
+# Rosetta (at least up to macOS 15.7) stops every program on kernels 6.13 and later, which hand
+# programs an entry it does not know (AT_HWCAP3). Register it anyway, and say why it may not run.
+release=$(uname -r)
+major=${release%%.*}
+minor=${release#*.}
+minor=${minor%%.*}
+if [ "$major" -gt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -ge 13 ]; }; then
+    echo "Rosetta cannot run programs on Linux $release (6.13 and later); start Ubuntu's 6.8 kernel for it, as the Linux Mint ARM manual explains." >&2
+fi
+mkdir -p /run/binfmt.d
+printf '%s\n' ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/run/rosetta/rosetta:CF' > /run/binfmt.d/rosetta.conf
+systemctl restart systemd-binfmt.service

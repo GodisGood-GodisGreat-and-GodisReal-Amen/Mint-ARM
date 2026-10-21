@@ -1,0 +1,20 @@
+Package: mint-arm-system
+Version: 22.3.5
+Architecture: all
+Maintainer: Linux Mint ARM local build <mint-arm@localhost>
+Depends: systemd-zram-generator
+Recommends: spice-vdagent, qemu-guest-agent
+Section: admin
+Priority: optional
+Description: Linux Mint ARM64 system settings for virtual machines on Apple silicon
+ Configuration for the unofficial arm64 build of Linux Mint 22.3:
+  - compressed RAM swap (zram) and matching memory settings
+  - a smaller systemd journal
+  - Firefox from Mozilla's arm64 apt repository, with Linux Mint's Firefox defaults;
+    it renders in software, because UTM's accelerated OpenGL (ANGLE, OpenGL 2.1) loses
+    Firefox's text when Firefox draws with it
+  - Ubuntu's snap-only Firefox, Thunderbird and Chromium packages are hidden, as
+    Linux Mint hides snapd
+  - Update Manager does not suggest Linux Mint mirrors, which carry no arm64 packages
+  - Apple Rosetta for x86-64 Linux programs when the VM runs under Apple's
+    Virtualization framework with Rosetta sharing enabled

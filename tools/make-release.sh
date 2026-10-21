@@ -1,0 +1,111 @@
+#!/bin/zsh
+# Turn a finished build (out/) into release files, in out/release/:
+#   linuxmint-22.3-cinnamon-arm64-unofficial.iso       the ISO
+#   linuxmint-22.3-cinnamon-arm64-unofficial-utm.zip   the UTM virtual machine
+#   mint-arm-repo_VERSION_all.deb                      Mint's packages for arm64, to update a
+#                                                      system made from an earlier release
+#   linuxmint-22.3-arm64-sources.tar                   Linux Mint's source packages for everything
+#                                                      compiled or patched for arm64, with the patch
+#   source-packages.tsv                                every source package behind the ISO and the
+#                                                      VM, its version, and where its source lives
+#   SHA256SUMS
+# The source list comes from the images themselves: the ISO boots headlessly with the VM's disk
+# attached read-only, lists what is installed, and downloads Mint's sources with apt, which
+# checks them against Linux Mint's signed index.
+#
+# usage: tools/make-release.sh [OUT_DIR]
+emulate -L zsh
+setopt err_exit pipe_fail
+
+HERE=${0:A:h}
+ROOT=${HERE:h}
+OUT=${${1:-$ROOT/out}:a}
+REL=$OUT/release
+QGA=4470 QMP=4471
+VERSION=$(awk '/^## / {print $2; exit}' $ROOT/CHANGELOG.md)
+REPO_URL=https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM
+BUNDLE="Linux Mint 22.3 ARM.utm"
+SOURCES=linuxmint-22.3-arm64-sources
+
+log() { print -r -- "[$(date +%H:%M:%S)] $*" }
+iso=($OUT/*.iso(Nom[1]))
+disk=($OUT/$BUNDLE/Data/*.qcow2(N))
+(( $#iso && $#disk )) || { print -u2 "no ISO or VM in $OUT: run ./build.sh first"; exit 1 }
+iso=$iso[1] disk=$disk[1]
+rm -rf $REL && mkdir -p $REL/.stage/$SOURCES
+
+log "starting the live ISO with the VM's disk attached (read-only)"
+QGA_PORT=$QGA QMP_PORT=$QMP SMP=4 MEM=6G $HERE/testvm.sh release $disk $iso -- -snapshot > $REL/.stage/vm.log 2>&1 &
+vm=$!
+trap '$HERE/qmp.py $QMP cmd "{\"name\": \"quit\"}" > /dev/null 2>&1 || kill $vm 2> /dev/null || true' EXIT
+$HERE/qga.py $QGA ping 600
+$HERE/qga.py $QGA put $HERE/source-manifest.py /tmp/source-manifest.py
+
+log "listing the source packages"
+# The ISO's own package pool has no signed Release file (as on Mint's ISO), so apt-get update
+# always reports that one source as an error.
+$HERE/qga.py $QGA run '
+  mkdir -p /mnt/vm && mount -o ro,noload /dev/vda2 /mnt/vm
+  nm-online -q --timeout=120   # the guest agent answers before the network is up
+  for try in 1 2 3; do
+    apt-get update -q > /tmp/apt-update.log 2>&1
+    ls /var/lib/apt/lists/*ports.ubuntu.com*_noble_main_binary-arm64_Packages* > /dev/null 2>&1 \
+      && ! grep -q "Failed to fetch http" /tmp/apt-update.log && break
+    sleep 10
+  done
+  ls /var/lib/apt/lists/*ports.ubuntu.com*_noble_main_binary-arm64_Packages* > /dev/null || { tail -5 /tmp/apt-update.log; exit 1; }
+  python3 /tmp/source-manifest.py --status /var/lib/dpkg --status /mnt/vm/var/lib/dpkg \
+    --debs "/cdrom/pool/**/*.deb" --debs "/usr/share/mint-arm/repo/**/*.deb" > /tmp/source-packages.tsv
+  python3 /tmp/source-manifest.py --rebuilt /usr/share/mint-arm/repo > /tmp/rebuilt.txt
+  echo "$(wc -l < /tmp/source-packages.tsv) source packages, $(wc -l < /tmp/rebuilt.txt) rebuilt or patched"' 900
+
+log "downloading Linux Mint's sources for the rebuilt packages"
+$HERE/qga.py $QGA run '
+  set -e
+  echo "deb-src http://packages.linuxmint.com zena main upstream import backport" > /etc/apt/sources.list.d/mint-src.list
+  apt-get update -q -o Dir::Etc::SourceList=/etc/apt/sources.list.d/mint-src.list -o Dir::Etc::SourceParts=- \
+    -o APT::Get::List-Cleanup=0 > /dev/null
+  rm -rf /tmp/src && mkdir /tmp/src && chown _apt /tmp/src && cd /tmp/src   # apt downloads as _apt
+  while read -r spec; do apt-get source --download-only --only-source -q "$spec" > /dev/null; done < /tmp/rebuilt.txt
+  tar -cf /tmp/sources.tar --owner=0 --group=0 --numeric-owner *
+  echo "$(ls *.dsc | wc -l) source packages, $(du -sh . | cut -f1)"' 1800
+$HERE/qga.py $QGA get /tmp/source-packages.tsv $REL/source-packages.tsv
+$HERE/qga.py $QGA get /tmp/sources.tar $REL/.stage/sources.tar
+$HERE/qmp.py $QMP cmd '{"name": "quit"}' > /dev/null
+wait $vm || true
+trap - EXIT
+
+log "packing $SOURCES.tar"
+tar -xf $REL/.stage/sources.tar -C $REL/.stage/$SOURCES
+cp $ROOT/build/patches/*.patch $REL/.stage/$SOURCES/
+cat > $REL/.stage/$SOURCES/README.txt <<EOF
+Linux Mint ARM $VERSION: the source code of the Linux Mint packages built for arm64
+
+This archive holds the Debian source packages (each .dsc and the files it lists) that the
+Linux Mint ARM build downloaded from packages.linuxmint.com and compiled for arm64, exactly as
+they went into the ISO and the virtual machine. mintsources and mintupdate were also changed
+for arm64: the changes are the .patch files here, applied with "patch -p1" inside the unpacked
+source.
+
+Unpack one with:  dpkg-source -x NAME_VERSION.dsc
+
+Everything else in the system is published by its makers; source-packages.tsv (next to this
+archive in the release) lists every source package, its version and where it comes from:
+  Ubuntu       https://launchpad.net/ubuntu/+source/NAME/VERSION, or apt-get source NAME=VERSION
+  Linux Mint   http://packages.linuxmint.com/pool/ and https://github.com/linuxmint
+  Mozilla      https://ftp.mozilla.org/pub/firefox/releases/ (Firefox and its language packs)
+The build scripts, and the packages this project makes itself, are in the repository:
+  $REPO_URL
+EOF
+bsdtar --no-mac-metadata --format ustar --uid 0 --gid 0 --uname root --gname root \
+  -cf $REL/$SOURCES.tar -C $REL/.stage $SOURCES
+
+log "packing the UTM virtual machine"
+ln -f $iso $REL/
+repo_deb=($OUT/mint-arm-repo_*_all.deb(Nom[1]))
+(( $#repo_deb )) && ln -f $repo_deb[1] $REL/
+(cd $OUT && zip -q -r -X -1 $REL/${iso:t:r}-utm.zip $BUNDLE -x '*.DS_Store')
+rm -rf $REL/.stage
+(cd $REL && shasum -a 256 *.iso *.zip *.deb(N) *.tar *.tsv > SHA256SUMS)
+log "release files for $VERSION in $REL:"
+ls -l $REL

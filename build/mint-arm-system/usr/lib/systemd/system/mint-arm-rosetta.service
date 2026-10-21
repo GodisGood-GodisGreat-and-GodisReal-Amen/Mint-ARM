@@ -1,0 +1,11 @@
+[Unit]
+Description=Apple Rosetta for x86-64 Linux programs
+After=local-fs.target systemd-binfmt.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/mint-arm/rosetta-setup
+
+[Install]
+WantedBy=multi-user.target

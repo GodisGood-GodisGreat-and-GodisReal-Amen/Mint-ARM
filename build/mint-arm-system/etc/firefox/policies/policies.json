@@ -1,0 +1,14 @@
+{
+  "policies": {
+    "DisableAppUpdate": true,
+    "DontCheckDefaultBrowser": true,
+    "Preferences": {
+      "browser.backspace_action": { "Value": 0, "Status": "default" },
+      "browser.tabs.inTitlebar": { "Value": 0, "Status": "default" },
+      "intl.locale.requested": { "Value": "", "Status": "default" },
+      "widget.content.gtk-theme-override": { "Value": "#", "Status": "default" },
+      "gfx.webrender.software": { "Value": true, "Status": "default" },
+      "gfx.webrender.software.opengl": { "Value": false, "Status": "default" }
+    }
+  }
+}

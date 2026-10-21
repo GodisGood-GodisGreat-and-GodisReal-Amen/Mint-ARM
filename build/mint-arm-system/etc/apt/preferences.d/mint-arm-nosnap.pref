@@ -1,0 +1,7 @@
+# Ubuntu publishes Firefox, Thunderbird and Chromium only as transitional packages that install
+# snaps, which Linux Mint does not use (its nosnap.pref blocks snapd). Hiding Ubuntu's copies
+# keeps them out of the Software Manager and lets real packages of the same names install from
+# elsewhere: Firefox from Mozilla, Thunderbird from a PPA such as ppa:mozillateam/ppa.
+Package: firefox firefox-locale-* thunderbird thunderbird-* chromium-browser chromium-browser-l10n chromium-chromedriver chromium-codecs-ffmpeg chromium-codecs-ffmpeg-extra
+Pin: release o=Ubuntu
+Pin-Priority: -1
