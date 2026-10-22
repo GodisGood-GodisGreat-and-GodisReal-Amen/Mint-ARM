@@ -220,7 +220,7 @@ Software Sources (`mintsources`) and Update Manager (`mintupdate`) are Linux Min
 
 ## 14. Raspberry Pi
 
-On a Raspberry Pi the image runs Ubuntu's Raspberry Pi kernel and is laid out like Ubuntu's own Raspberry Pi images. It works on the Raspberry Pi 4, 400 and Compute Module 4 and the Raspberry Pi 5, 500 and Compute Module 5. [Getting started](getting-started.md#4-on-a-raspberry-pi) shows how to write it to a card.
+On a Raspberry Pi the image runs Ubuntu's Raspberry Pi kernel and is laid out like Ubuntu's own Raspberry Pi images. It works on the Raspberry Pi 4, 400 and Compute Module 4 and the Raspberry Pi 5, 500 and Compute Module 5. [Getting started](getting-started.md#4-on-a-raspberry-pi) shows how to write it to a card. This release has not been tested on a real Pi yet, only with the Pi's kernel in QEMU on a Mac.
 
 **The first start** grows the system partition to fill the card (in the initrd, then `growroot-almost.service` grows the file system), removes what only virtual machines use, then runs *System Configuration* ([section 2](#2-the-first-start)).
 

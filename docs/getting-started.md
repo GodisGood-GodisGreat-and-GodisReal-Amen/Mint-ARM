@@ -69,7 +69,7 @@ The image also works as the disk of a VM you set up yourself: in UTM with Apple'
 
 ## 4. On a Raspberry Pi
 
-On a Pi, the same image goes on a card: Linux Mint is already installed, and its first start asks for your preferences.
+On a Pi, the same image goes on a card: Linux Mint is already installed, and its first start asks for your preferences. This release has not been tested on a real Raspberry Pi yet, only with the Pi's kernel in QEMU on a Mac.
 
 1. **Download** `linuxmint-22.3-cinnamon-arm64-unofficial.img.xz` (1.46 GB) from the [latest release](https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM/releases/latest), and check it as above if you like. Leave it compressed: Raspberry Pi Imager unpacks it while it writes.
 2. **Write it to the card** with Raspberry Pi Imager:

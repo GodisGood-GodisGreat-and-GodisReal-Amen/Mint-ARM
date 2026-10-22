@@ -113,7 +113,7 @@ With `--test-ssh`, another copy gets an SSH server for testing on a real Pi ([bu
 
 Firefox is Mozilla's ARM64 package from `packages.mozilla.org`, pinned at 1000: Mozilla's versions are numbered lower than Ubuntu's snap wrapper (`1:1snap1`), which `mint-arm-nosnap.pref` hides anyway. Linux Mint's own Firefox defaults are set by policy (`/etc/firefox/policies/policies.json`): Firefox's updater off (apt updates it), no default-browser check, and Linux Mint's settings for the Backspace key, the title bar, the language and the theme.
 
-UTM's *GPU Supported* display is a `virtio-gpu-gl-pci` card: Mesa's VirGL driver in Linux sends OpenGL commands to QEMU, where virglrenderer replays them on ANGLE, which translates OpenGL ES to Metal. ANGLE offers OpenGL ES 3.0, so programs in the guest see OpenGL 2.1 and OpenGL ES 3.0. Through that path Firefox's WebRender lost all its text, while Cinnamon, GTK 4 and video players drew correctly; the VM edition therefore sets `gfx.webrender.software` (WebRender's CPU renderer) and `gfx.webrender.software.opengl = false` (presented without OpenGL), in a Firefox defaults file of `mint-arm-vm` (`/usr/lib/firefox/defaults/pref/mint-arm-vm.js`). On a Raspberry Pi that file is gone after the first start, and Firefox draws with the Pi's GPU, as Mozilla's defaults have it.
+UTM's *GPU Supported* display is a `virtio-gpu-gl-pci` card: Mesa's VirGL driver in Linux sends OpenGL commands to QEMU, where virglrenderer replays them on ANGLE, which translates OpenGL ES to Metal. ANGLE offers OpenGL ES 3.0, so programs in the guest see OpenGL 2.1 and OpenGL ES 3.0. Through that path Firefox's WebRender lost all its text, while Cinnamon, GTK 4 and video players drew correctly; `mint-arm-vm` therefore sets `gfx.webrender.software` (WebRender's CPU renderer) and `gfx.webrender.software.opengl = false` (presented without OpenGL), in a Firefox defaults file (`/usr/lib/firefox/defaults/pref/mint-arm-vm.js`). On a Raspberry Pi that file is gone after the first start, and Firefox draws with the Pi's GPU, as Mozilla's defaults have it.
 
 ## Measured
 
@@ -131,22 +131,16 @@ On an M4 Max with the virtual hardware of the ready-made VM (6 cores, 8 GB, QEMU
 | The Mac's CPU with the desktop idle, GPU display | 4.9 % of one core (CPU-drawn display: 13.4 %) |
 | The whole build (`./build.sh`, 8 cores) | about 40 minutes (see [building](building.md#3-the-stages)) |
 
-On a Raspberry Pi (TODO-MEASURE-PIMODEL):
-
-| | |
-| --- | --- |
-| First start, power to the setup wizard | TODO-MEASURE-PIFIRST |
-| Kernel and services ready (`systemd-analyze`) | TODO-MEASURE-PIBOOT |
-| Memory in use with the desktop open | TODO-MEASURE-PIMEM |
+On a Raspberry Pi: not measured yet, as this release was not tested on a real Pi. With the Pi's own kernel in QEMU on the same Mac (4 cores, 4 GB), the kernel and services are ready in 1.5 s and the desktop runs in 0.9 GB.
 
 ## Tested for each release
 
 - The image as a virtual machine's disk (QEMU, UEFI): GRUB starts the VM kernel; the system grows to fill the disk; the first start removes the Raspberry Pi's half and moves the boot partition to `/boot/efi`; Linux Mint's setup runs and removes its temporary account; no failed systemd units; Update Manager offers no kernel change; a kernel update goes through GRUB.
 - The image as a Raspberry Pi starts it, in QEMU on its own Raspberry Pi kernel: the first start removes the virtual machines' half, in its two passes; the desktop starts; a kernel update goes onto the boot partition through `flash-kernel`.
-- The image on a real Raspberry Pi, through the SSH test image: the firmware starts it; the GPU draws the desktop; Wi-Fi, Bluetooth and sound find the Pi's hardware; the system grows to fill the card; a kernel update and a restart work.
+- The image on a real Raspberry Pi, through the SSH test image (not done for 1.1.0): the firmware starts it; the GPU draws the desktop; Wi-Fi, Bluetooth and sound find the Pi's hardware; the system grows to fill the card; a kernel update and a restart work.
 - The ready-made VM's first start runs Linux Mint's setup; every copy gets its own machine ID. The GPU-accelerated display works on UTM's own QEMU (virglrenderer and ANGLE onto Metal), with the SPICE agent running, and Firefox shows pages correctly.
 - Under Apple's Virtualization framework with Rosetta shared in, the image starts as a VM; with Ubuntu's 6.8 kernel, installed as the [manual](manual.md#8-rosetta-for-x86-64-programs) describes, x86-64 programs run.
 - A VM made from the previous release updates with the new `mint-arm-repo` package.
 - The images carry no traces of the machine that built them.
 
-Not tested yet: the VM inside UTM's own window (the same QEMU, virglrenderer and ANGLE were tested outside it; UTM's window only shows the result), VMware Fusion, Parallels Desktop, Secure Boot, setups in languages other than English, and the Raspberry Pi models other than the one named above.
+Not tested yet: a real Raspberry Pi (1.1.0 was tested with the Pi's kernel in QEMU only), the VM inside UTM's own window (the same QEMU, virglrenderer and ANGLE were tested outside it; UTM's window only shows the result), VMware Fusion, Parallels Desktop, Secure Boot, and setups in languages other than English.
