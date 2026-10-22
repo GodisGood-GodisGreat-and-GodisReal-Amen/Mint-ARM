@@ -32,8 +32,7 @@ reindex() {
 setup() {
   sudo apt-get -qq update
   sudo apt-get -y -qq install --no-install-recommends build-essential devscripts equivs debhelper fakeroot \
-    dpkg-dev apt-utils debootstrap squashfs-tools xorriso mtools dosfstools grub-efi-arm64-bin grub-common \
-    grub2-common rsync zstd python3-apt gnupg curl dctrl-tools > /dev/null
+    dpkg-dev apt-utils debootstrap dosfstools rsync zstd python3-apt gnupg curl dctrl-tools > /dev/null
   sudo mkdir -p "$W"/{src,repo/arm64,repo/all,logs,aptall/lists/partial,aptall/archives/partial}
   sudo chown -R "$(id -un):" "$W"
   sudo chmod 755 "$W" "$W/repo"

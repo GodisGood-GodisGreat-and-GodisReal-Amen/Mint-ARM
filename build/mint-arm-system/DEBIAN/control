@@ -1,20 +1,22 @@
 Package: mint-arm-system
-Version: 22.3.5
+Version: 22.3.6
 Architecture: all
 Maintainer: Linux Mint ARM local build <mint-arm@localhost>
-Depends: systemd-zram-generator
-Recommends: spice-vdagent, qemu-guest-agent
+Depends: systemd-zram-generator, mint-arm-vm | mint-arm-pi
+Conflicts: ubiquity-frontend-kde, oem-config-kde
 Section: admin
 Priority: optional
-Description: Linux Mint ARM64 system settings for virtual machines on Apple silicon
- Configuration for the unofficial arm64 build of Linux Mint 22.3:
+Description: Linux Mint ARM64 system settings
+ Configuration for the unofficial arm64 build of Linux Mint 22.3, which runs on the Raspberry
+ Pi and in virtual machines (mint-arm-pi and mint-arm-vm hold what only one of them needs):
+  - on the first start, the system removes what its machine does not use: the Raspberry
+    Pi's kernel, firmware and boot tools in a virtual machine, the virtual machine's kernel,
+    GRUB and guest tools on a Raspberry Pi
   - compressed RAM swap (zram) and matching memory settings
   - a smaller systemd journal
-  - Firefox from Mozilla's arm64 apt repository, with Linux Mint's Firefox defaults;
-    it renders in software, because UTM's accelerated OpenGL (ANGLE, OpenGL 2.1) loses
-    Firefox's text when Firefox draws with it
+  - Firefox from Mozilla's arm64 apt repository, with Linux Mint's Firefox defaults
   - Ubuntu's snap-only Firefox, Thunderbird and Chromium packages are hidden, as
     Linux Mint hides snapd
   - Update Manager does not suggest Linux Mint mirrors, which carry no arm64 packages
-  - Apple Rosetta for x86-64 Linux programs when the VM runs under Apple's
-    Virtualization framework with Rosetta sharing enabled
+  - the first-start setup gets Ubiquity's GTK front end back, never the KDE one, which
+    apt would otherwise pick (with some 120 Qt and KDE packages)

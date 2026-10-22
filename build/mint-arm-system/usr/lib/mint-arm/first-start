@@ -1,0 +1,106 @@
+#!/bin/sh
+# Linux Mint ARM's first start. The same system runs on a Raspberry Pi and in virtual machines;
+# on its first start it removes what this machine does not use (the package lists in
+# /usr/share/mint-arm: remove-on-pi, remove-on-vm) and sets the boot partition up for it.
+# A package that something staying installed still needs stays. Linux Mint's setup wizard, which
+# runs right after, needs some of GRUB's tools, so a second run after the wizard
+# (mint-arm-first-start-late.service) removes what the first could not. The image build leaves
+# /var/lib/mint-arm/first-start-pending; this removes it once there is nothing left to do, so a
+# system updated from an earlier release never runs it.
+#   MINT_ARM_PLATFORM=pi|vm, or mint-arm.platform=pi|vm on the kernel command line, decides the
+#   machine instead of the detection: for tests, and for the build, which prepares the UTM VM so.
+set -u
+PENDING=/var/lib/mint-arm/first-start-pending
+[ -e "$PENDING" ] || exit 0
+export DEBIAN_FRONTEND=noninteractive
+APT="apt-get -y -q -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef"
+in_chroot=
+systemd-detect-virt --quiet --chroot && in_chroot=1
+
+platform=${MINT_ARM_PLATFORM:-}
+case " $(cat /proc/cmdline 2> /dev/null) " in
+  *" mint-arm.platform=pi "*) platform=${platform:-pi} ;;
+  *" mint-arm.platform=vm "*) platform=${platform:-vm} ;;
+esac
+if [ -z "$platform" ]; then
+  if tr -d '\0' < /proc/device-tree/model 2> /dev/null | grep -q '^Raspberry Pi'; then platform=pi; else platform=vm; fi
+fi
+echo "mint-arm first start: on a ${platform}"
+
+set -f   # the lists hold shell-style patterns, for dpkg-query only
+patterns=$(grep -v '^#' "/usr/share/mint-arm/remove-on-$platform")
+installed() {
+  # shellcheck disable=SC2086
+  dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' $patterns 2> /dev/null | awk '$1 ~ /^i/ {print $2}' | sort -u
+}
+
+# The installed packages of the list that can go without taking anything else with them: apt is
+# asked what removing them would remove, and whatever a package outside the list still depends
+# on is kept, until nothing outside the list goes.
+removable=" $(installed | tr '\n' ' ')"
+for round in 1 2 3 4 5 6 7 8; do
+  [ -n "${removable# }" ] || break
+  # shellcheck disable=SC2086
+  others=$(apt-get -s --allow-remove-essential purge $removable 2> /dev/null | awk '/^Purg /{print $2}' \
+           | while read -r p; do case "$removable" in (*" $p "*) ;; (*) echo "$p" ;; esac; done)
+  [ -n "$others" ] || break
+  # shellcheck disable=SC2086
+  needed=" $(apt-cache depends --installed --no-recommends --no-suggests --no-conflicts --no-breaks \
+                --no-replaces --no-enhances $others 2> /dev/null | awk '/Depends:/ {print $2}' | tr '\n' ' ') "
+  kept=
+  for p in $removable; do case "$needed" in *" $p "*) ;; *) kept="$kept $p" ;; esac; done
+  if [ "$kept " = "$removable" ] || [ "$round" = 8 ]; then removable=" "; break; fi
+  removable="$kept "
+done
+
+if [ -n "${removable# }" ]; then
+  echo "removing:${removable% }"
+  # shellcheck disable=SC2086
+  $APT --allow-remove-essential purge $removable && $APT --purge autoremove
+fi
+# Packages of the list removed with their settings left behind (the setup wizard removes itself,
+# and what only it needed, so): their settings go too.
+# shellcheck disable=SC2086
+leftover=$(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' $patterns 2> /dev/null | awk '$1 == "rc" {print $2}')
+# shellcheck disable=SC2086
+[ -z "$leftover" ] || $APT purge $leftover
+
+set +f
+# The boot partition holds both machines' boot files until now.
+if [ "$platform" = vm ] && grep -q '[[:space:]]/boot/firmware[[:space:]]' /etc/fstab; then
+  # It becomes the UEFI system partition, mounted at /boot/efi, without the Raspberry Pi's files.
+  for f in /boot/firmware/* /boot/firmware/.[!.]*; do
+    case "${f##*/}" in EFI|'*'|'.[!.]*') ;; *) rm -rf "$f" ;; esac
+  done
+  # flash-kernel's links to a Pi's device tree: GRUB would hand that to this machine's kernel
+  rm -rf /boot/dtb /boot/dtb-* /boot/dtbs
+  sed -i 's|^\(LABEL=system-boot[[:space:]]\+\)/boot/firmware[[:space:]]\+vfat[[:space:]]\+defaults|\1/boot/efi\tvfat\tumask=0077|' /etc/fstab
+  mkdir -p /boot/efi
+  # The swap file behind the compressed RAM swap: 2 GB and a line in /etc/fstab, as on Linux
+  # Mint. The Raspberry Pi's settings may have made a 1 GB one earlier in this start.
+  if [ "$(stat -c %s /swapfile 2> /dev/null || echo 0)" -lt 2147483648 ]; then
+    swapoff /swapfile 2> /dev/null
+    rm -f /swapfile
+    fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap -q /swapfile
+  fi
+  grep -q '^/swapfile[[:space:]]' /etc/fstab || printf '/swapfile\tnone\tswap\tsw\t0\t0\n' >> /etc/fstab
+  if [ -z "$in_chroot" ]; then
+    umount /boot/firmware && rmdir /boot/firmware
+    systemctl daemon-reload
+    mount /boot/efi
+    swapon /swapfile 2> /dev/null || true
+  fi
+  update-grub 2> /dev/null || true
+elif [ "$platform" = pi ]; then
+  rm -rf /boot/firmware/EFI
+  [ -x /usr/sbin/grub-probe ] || rm -rf /boot/grub
+fi
+
+# Done when nothing is left, or once the setup wizard is over: what remains then, something needs.
+wizard=
+[ -e /usr/lib/systemd/system/oem-config.service ] && wizard=1
+if [ -z "$(installed)" ] || [ -z "$wizard" ]; then
+  rm -f "$PENDING"
+  echo "mint-arm first start: done"
+fi
+exit 0

@@ -1,0 +1,16 @@
+Package: mint-arm-vm
+Version: 22.3.6
+Architecture: all
+Maintainer: Linux Mint ARM local build <mint-arm@localhost>
+Recommends: spice-vdagent, qemu-guest-agent
+Breaks: mint-arm-system (<< 22.3.6)
+Replaces: mint-arm-system (<< 22.3.6)
+Section: admin
+Priority: optional
+Description: Linux Mint ARM64 settings for virtual machines on Apple silicon
+ What only virtual machines use in the unofficial arm64 build of Linux Mint 22.3 (the first
+ start removes this package on a Raspberry Pi):
+  - Firefox renders in software, because UTM's accelerated OpenGL (ANGLE, OpenGL 2.1)
+    loses Firefox's text when Firefox draws with it
+  - Apple Rosetta for x86-64 Linux programs when the VM runs under Apple's
+    Virtualization framework with Rosetta sharing enabled

@@ -1,0 +1,38 @@
+# Linux Mint ARM: the Raspberry Pi firmware's settings, read at power-on (the same settings as
+# Ubuntu 24.04's Raspberry Pi desktop image). Options are described at
+# https://www.raspberrypi.com/documentation/computers/config_txt.html
+
+[all]
+# Ubuntu's kernel and initrd, which flash-kernel copies here on every kernel update
+kernel=vmlinuz
+cmdline=cmdline.txt
+initramfs initrd.img followkernel
+# 64-bit mode on the Pi 4 (a Pi 5 is always 64-bit)
+arm_64bit=1
+
+# sound, and the I2C and SPI interfaces of the GPIO header
+dtparam=audio=on
+dtparam=i2c_arm=on
+dtparam=spi=on
+
+# the Linux graphics driver (KMS) sets up the displays, not the firmware
+dtoverlay=vc4-kms-v3d
+disable_fw_kms_setup=1
+disable_overscan=1
+# find the official cameras and displays
+camera_auto_detect=1
+display_auto_detect=1
+
+# the USB controller that can also work as a USB device (gadget)
+dtoverlay=dwc2
+
+[pi4]
+max_framebuffers=2
+# the Pi 4's full clock speed (1.8 GHz on boards that support it)
+arm_boost=1
+
+[cm4]
+# the Compute Module 4's USB 2 port as a host port
+dtoverlay=dwc2,dr_mode=host
+
+[all]

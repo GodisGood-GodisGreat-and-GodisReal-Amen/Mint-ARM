@@ -1,17 +1,19 @@
 #!/bin/zsh
 # Turn a finished build (out/) into release files, in out/release/:
-#   linuxmint-22.3-cinnamon-arm64-unofficial.iso       the ISO
-#   linuxmint-22.3-cinnamon-arm64-unofficial-utm.zip   the UTM virtual machine
+#   linuxmint-22.3-cinnamon-arm64-unofficial.img.xz    the image: a Raspberry Pi's card or a VM's disk
+#   linuxmint-22.3-cinnamon-arm64-unofficial-utm.zip   the ready-made UTM virtual machine
 #   mint-arm-repo_VERSION_all.deb                      Mint's packages for arm64, to update a
 #                                                      system made from an earlier release
 #   linuxmint-22.3-arm64-sources.tar                   Linux Mint's source packages for everything
-#                                                      compiled or patched for arm64, with the patch
-#   source-packages.tsv                                every source package behind the ISO and the
-#                                                      VM, its version, and where its source lives
+#                                                      compiled or patched for arm64, with the patches
+#   source-packages.tsv                                every source package in the image, its
+#                                                      version, and where its source lives
 #   SHA256SUMS
-# The source list comes from the images themselves: the ISO boots headlessly with the VM's disk
-# attached read-only, lists what is installed, and downloads Mint's sources with apt, which
-# checks them against Linux Mint's signed index.
+# The source list comes from the image itself: it starts headlessly in QEMU as testpi.sh starts it,
+# on a throwaway overlay, with its first start held back so that both its halves are still there;
+# it lists what is installed and downloads Mint's sources with apt, which checks them against
+# Linux Mint's signed index. The UTM VM's disk is that image with one half removed. A test image
+# (with SSH, from ./build.sh --test-ssh) is refused.
 #
 # usage: tools/make-release.sh [OUT_DIR]
 emulate -L zsh
@@ -25,27 +27,35 @@ QGA=4470 QMP=4471
 VERSION=$(awk '/^## / {print $2; exit}' $ROOT/CHANGELOG.md)
 REPO_URL=https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM
 BUNDLE="Linux Mint 22.3 ARM.utm"
+IMAGE=linuxmint-22.3-cinnamon-arm64-unofficial.img.xz
 SOURCES=linuxmint-22.3-arm64-sources
 
 log() { print -r -- "[$(date +%H:%M:%S)] $*" }
-iso=($OUT/*.iso(Nom[1]))
 disk=($OUT/$BUNDLE/Data/*.qcow2(N))
-(( $#iso && $#disk )) || { print -u2 "no ISO or VM in $OUT: run ./build.sh first"; exit 1 }
-iso=$iso[1] disk=$disk[1]
+[[ -f $OUT/$IMAGE && $#disk -gt 0 ]] || { print -u2 "no image or VM in $OUT: run ./build.sh first"; exit 1 }
+# the documents a release points to carry no placeholder for a measurement or a date
+if grep -rqE 'TODO-[A-Z]' $ROOT/README.md $ROOT/CHANGELOG.md $ROOT/CONTRIBUTING.md $ROOT/docs; then
+  print -u2 "placeholders are left in the documents:"
+  grep -rnoE 'TODO-[A-Z0-9-]+' $ROOT/README.md $ROOT/CHANGELOG.md $ROOT/CONTRIBUTING.md $ROOT/docs | sed "s|^$ROOT/|  |" >&2
+  exit 1
+fi
 rm -rf $REL && mkdir -p $REL/.stage/$SOURCES
 
-log "starting the live ISO with the VM's disk attached (read-only)"
-QGA_PORT=$QGA QMP_PORT=$QMP SMP=4 MEM=6G $HERE/testvm.sh release $disk $iso -- -snapshot > $REL/.stage/vm.log 2>&1 &
+log "starting the image (its first start held back), on a throwaway overlay"
+TESTPI_DIR=$REL/.stage QGA_PORT=$QGA QMP_PORT=$QMP SSH_PORT=4472 SMP=4 MEM=6G CARD=16G \
+  APPEND="mint-arm.first-start=no systemd.unit=multi-user.target" \
+  $HERE/testpi.sh vm $OUT/$IMAGE > $REL/.stage/vm.log 2>&1 &
 vm=$!
 trap '$HERE/qmp.py $QMP cmd "{\"name\": \"quit\"}" > /dev/null 2>&1 || kill $vm 2> /dev/null || true' EXIT
 $HERE/qga.py $QGA ping 600
 $HERE/qga.py $QGA put $HERE/source-manifest.py /tmp/source-manifest.py
 
 log "listing the source packages"
-# The ISO's own package pool has no signed Release file (as on Mint's ISO), so apt-get update
-# always reports that one source as an error.
 $HERE/qga.py $QGA run '
-  mkdir -p /mnt/vm && mount -o ro,noload /dev/vda2 /mnt/vm
+  # the image of a release has no SSH server and no keys (a --test-ssh image has both)
+  if dpkg-query -W -f="\${db:Status-Abbrev}" openssh-server 2> /dev/null | grep -q "^ii" || [ -e /root/.ssh/authorized_keys ]; then
+    echo "this is a test image (it has SSH access): build the release without --test-ssh"; exit 1
+  fi
   nm-online -q --timeout=120   # the guest agent answers before the network is up
   for try in 1 2 3; do
     apt-get update -q > /tmp/apt-update.log 2>&1
@@ -54,8 +64,8 @@ $HERE/qga.py $QGA run '
     sleep 10
   done
   ls /var/lib/apt/lists/*ports.ubuntu.com*_noble_main_binary-arm64_Packages* > /dev/null || { tail -5 /tmp/apt-update.log; exit 1; }
-  python3 /tmp/source-manifest.py --status /var/lib/dpkg --status /mnt/vm/var/lib/dpkg \
-    --debs "/cdrom/pool/**/*.deb" --debs "/usr/share/mint-arm/repo/**/*.deb" > /tmp/source-packages.tsv
+  python3 /tmp/source-manifest.py --status /var/lib/dpkg --debs "/usr/share/mint-arm/repo/**/*.deb" \
+    > /tmp/source-packages.tsv
   python3 /tmp/source-manifest.py --rebuilt /usr/share/mint-arm/repo > /tmp/rebuilt.txt
   echo "$(wc -l < /tmp/source-packages.tsv) source packages, $(wc -l < /tmp/rebuilt.txt) rebuilt or patched"' 900
 
@@ -83,9 +93,9 @@ Linux Mint ARM $VERSION: the source code of the Linux Mint packages built for ar
 
 This archive holds the Debian source packages (each .dsc and the files it lists) that the
 Linux Mint ARM build downloaded from packages.linuxmint.com and compiled for arm64, exactly as
-they went into the ISO and the virtual machine. mintsources and mintupdate were also changed
-for arm64: the changes are the .patch files here, applied with "patch -p1" inside the unpacked
-source.
+they went into the image (and the UTM virtual machine made from it). mintsources and
+mintupdate were also changed for arm64: the changes are the .patch files here, applied with
+"patch -p1" inside the unpacked source.
 
 Unpack one with:  dpkg-source -x NAME_VERSION.dsc
 
@@ -101,11 +111,14 @@ bsdtar --no-mac-metadata --format ustar --uid 0 --gid 0 --uname root --gname roo
   -cf $REL/$SOURCES.tar -C $REL/.stage $SOURCES
 
 log "packing the UTM virtual machine"
-ln -f $iso $REL/
+ln -f $OUT/$IMAGE $REL/
 repo_deb=($OUT/mint-arm-repo_*_all.deb(Nom[1]))
 (( $#repo_deb )) && ln -f $repo_deb[1] $REL/
-(cd $OUT && zip -q -r -X -1 $REL/${iso:t:r}-utm.zip $BUNDLE -x '*.DS_Store')
+(cd $OUT && zip -q -r -X -1 $REL/${IMAGE%.img.xz}-utm.zip $BUNDLE -x '*.DS_Store')
 rm -rf $REL/.stage
-(cd $REL && shasum -a 256 *.iso *.zip *.deb(N) *.tar *.tsv > SHA256SUMS)
+(cd $REL && shasum -a 256 *.img.xz *.zip *.deb(N) *.tar *.tsv > SHA256SUMS)
+for f in $REL/*.img.xz $REL/*.zip; do
+  (( $(stat -f %z $f) <= 2147483648 )) || { print -u2 "${f:t} is over GitHub's 2 GiB limit for a release file"; exit 1 }
+done
 log "release files for $VERSION in $REL:"
 ls -l $REL

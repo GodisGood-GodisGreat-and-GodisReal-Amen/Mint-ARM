@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """List the source package behind every binary package of a Linux Mint ARM system, and where
-that source is published. Runs inside the system (make-release.sh runs it in the live ISO),
+that source is published. Runs inside the system (make-release.sh runs it in the image, started in QEMU),
 after `apt-get update`, so that apt knows which archive each installed version came from.
 
 usage: source-manifest.py [--status DPKG_ADMINDIR]... [--debs GLOB]...

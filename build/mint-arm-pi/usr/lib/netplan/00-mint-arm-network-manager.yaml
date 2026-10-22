@@ -1,0 +1,6 @@
+# Linux Mint ARM: NetworkManager manages every network device, wired ones included (as Linux
+# Mint's /etc/netplan/01-network-manager-all.yaml says; ubuntu-raspi-settings-desktop deletes
+# that file each time it is installed or updated).
+network:
+  version: 2
+  renderer: NetworkManager

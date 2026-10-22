@@ -1,0 +1,16 @@
+Package: mint-arm-pi
+Version: 22.3.6
+Architecture: all
+Maintainer: Linux Mint ARM local build <mint-arm@localhost>
+Depends: linux-image-raspi | linux-image-raspi-realtime, flash-kernel, u-boot-tools, linux-firmware-raspi,
+ ubuntu-raspi-settings-desktop
+Section: admin
+Priority: optional
+Description: Linux Mint ARM64 settings for the Raspberry Pi
+ What only the Raspberry Pi uses in the unofficial arm64 build of Linux Mint 22.3, for the
+ Raspberry Pi 4, 400 and Compute Module 4 and the Raspberry Pi 5, 500 and Compute Module 5
+ (the first start removes this package in a virtual machine).
+ It keeps the Pi's boot chain installed: the Raspberry Pi kernel; flash-kernel, which puts
+ every new kernel, its initrd and the device trees on the boot partition (using mkimage
+ from u-boot-tools); the Pi's boot, Wi-Fi and Bluetooth firmware; and Ubuntu's Raspberry Pi
+ desktop settings.

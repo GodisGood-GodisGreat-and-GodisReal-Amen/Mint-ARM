@@ -3,7 +3,9 @@
 # Linux Mint's packages.
 #  - mintsources (Software Sources) patched to use ports.ubuntu.com
 #  - mintupdate (Update Manager) patched to recognise the installed kernel line
-#  - mint-arm-system: zram, journal size, Firefox from Mozilla, Rosetta helper
+#  - the settings packages: mint-arm-system (every machine: zram, journal size, Firefox from
+#    Mozilla, the first start), mint-arm-vm (Firefox rendering, Rosetta helper) and mint-arm-pi
+#    (the Pi's boot chain)
 #  - firefox-locale-* transitional packages that point at Mozilla's language packs
 # Runs inside the build VM after 10-packages.sh; adds its packages to $W/repo.
 set -euo pipefail
@@ -14,8 +16,8 @@ MOZILLA_KEY_URL=https://packages.mozilla.org/apt/repo-signing-key.gpg
 MOZILLA_KEY_FPR=35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3
 ARM_SUFFIX=+arm64.1
 
-build_patched() {
-  local pkg=$1 patch=$2 note=$3 cache=$W/srccache/$1
+build_patched() {   # PACKAGE PATCH CHANGELOG_NOTE [VERSION_SUFFIX]
+  local pkg=$1 patch=$2 note=$3 suffix=${4:-$ARM_SUFFIX} cache=$W/srccache/$1
   if ! ls "$cache"/*.dsc > /dev/null 2>&1; then
     mkdir -p "$cache" && (cd "$cache" && apt-get source -qq --download-only --only-source "$pkg" > /dev/null)
   fi
@@ -26,27 +28,40 @@ build_patched() {
   patch -p1 --no-backup-if-mismatch < "$patch"
   local v; v=$(dpkg-parsechangelog -S Version)
   DEBEMAIL=mint-arm@localhost DEBFULLNAME="Linux Mint ARM local build" \
-    dch -v "$v$ARM_SUFFIX" -D "$(dpkg-parsechangelog -S Distribution)" "$note"
+    dch -v "$v$suffix" -D "$(dpkg-parsechangelog -S Distribution)" "$note"
   sudo apt-get -y -qq --no-install-recommends build-dep ./ > /dev/null
   dpkg-buildpackage -b -uc -us > "$W/logs/$pkg-arm.log" 2>&1
-  cp -f ../*"$ARM_SUFFIX"_*.deb "$W/repo/all/"
-  log "OK   $pkg $v$ARM_SUFFIX"
+  cp -f ../*"$suffix"_*.deb "$W/repo/all/"
+  log "OK   $pkg $v$suffix"
 }
 
-build_system_package() {
-  local root=$W/patched/mint-arm-system
-  rm -rf "$root" && mkdir -p "$W/patched" && cp -a "$HERE/mint-arm-system" "$root"
-  local tmp; tmp=$(mktemp -d)
+build_settings_packages() {
+  local tmp name root
+  tmp=$(mktemp -d)
   curl -fsS -o "$tmp/key" "$MOZILLA_KEY_URL"
   gpg -q --show-keys --with-colons "$tmp/key" | grep -q "^fpr:::::::::$MOZILLA_KEY_FPR:" \
     || { echo "Mozilla key fingerprint mismatch" >&2; exit 1; }
-  install -D -m 644 "$tmp/key" "$root/etc/apt/keyrings/packages.mozilla.org.asc"
-  echo /etc/apt/keyrings/packages.mozilla.org.asc >> "$root/DEBIAN/conffiles"
+  rm -f "$W"/repo/all/mint-arm-{system,vm,pi}_*.deb   # only the versions built now
+  for name in mint-arm-system mint-arm-vm mint-arm-pi; do
+    root=$W/patched/$name
+    rm -rf "$root" && mkdir -p "$W/patched" && cp -a "$HERE/$name" "$root"
+    if [ "$name" = mint-arm-system ]; then
+      install -D -m 644 "$tmp/key" "$root/etc/apt/keyrings/packages.mozilla.org.asc"
+      echo /etc/apt/keyrings/packages.mozilla.org.asc >> "$root/DEBIAN/conffiles"
+      # what the first start removes in a virtual machine and on a Raspberry Pi (packages.conf)
+      mkdir -p "$root/usr/share/mint-arm"
+      for platform in vm pi; do
+        awk -v section="[remove-on-$platform]" '/^\[/ {on = ($1 == section); next}
+          on {sub(/#.*/, ""); for (i = 1; i <= NF; i++) print $i}' "$HERE/packages.conf" \
+          > "$root/usr/share/mint-arm/remove-on-$platform"
+      done
+    fi
+    chmod -R go-w "$root"
+    find "$root" -path '*/netplan/*.yaml' -exec chmod 600 {} +   # netplan wants them private
+    dpkg-deb --root-owner-group -Zxz --build "$root" "$W/repo/all/" > /dev/null
+    log "OK   $name $(dpkg-deb -f "$W"/repo/all/"$name"_*.deb Version)"
+  done
   rm -rf "$tmp"
-  chmod -R go-w "$root"
-  rm -f "$W"/repo/all/mint-arm-system_*.deb   # only the version built now
-  dpkg-deb --root-owner-group -Zxz --build "$root" "$W/repo/all/" > /dev/null
-  log "OK   mint-arm-system $(dpkg-deb -f "$W"/repo/all/mint-arm-system_*.deb Version)"
 }
 
 # The installer and Mint's Language Settings install Firefox translations as firefox-locale-XX.
@@ -81,8 +96,12 @@ build_firefox_locales() {
 build_patched mintsources "$HERE/patches/mintsources-ubuntu-ports.patch" \
   "Use ports.ubuntu.com (base, security and mirror list) on architectures other than amd64/i386."
 build_patched mintupdate "$HERE/patches/mintupdate-arm-kernels.patch" \
-  "Count the installed virtual kernel metapackage; never offer 64k-page kernels (arm64)."
-build_system_package
+  "Count the installed virtual kernel metapackage; never offer 64k-page kernels (arm64); offer no other kernel line on a kernel flavour it does not know (Raspberry Pi)." \
+  +arm64.2
+build_settings_packages
 build_firefox_locales
 index_repo "$W/repo"
+# The local archive package (mint-arm-repo) is made from these: the next system assembled
+# (20-rootfs.sh) builds it anew.
+rm -rf "${W:?}/mint-arm-repo"
 sudo apt-get -qq update --allow-releaseinfo-change

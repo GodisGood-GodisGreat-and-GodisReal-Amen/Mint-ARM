@@ -1,0 +1,22 @@
+Linux Mint ARM (unofficial arm64 build of Linux Mint 22.3 "Zena" Cinnamon): Raspberry Pi
+
+What only the Raspberry Pi uses (the system's first start removes this package in a virtual
+machine), for the Raspberry Pi 4, 400 and Compute Module 4 and the Raspberry Pi 5, 500 and
+Compute Module 5. The system runs Ubuntu 24.04's Raspberry Pi kernel and is laid out like
+Ubuntu's Raspberry Pi images:
+
+  /boot/firmware   the card's FAT partition ("system-boot"): the Pi's boot firmware, the kernel
+                   (vmlinuz), its initrd (initrd.img), the device trees and overlays,
+                   config.txt and cmdline.txt
+  /                the ext4 partition ("writable"), grown to fill the card on the first start
+
+flash-kernel copies each new kernel, its initrd and the device trees to /boot/firmware when the
+kernel is updated, and keeps the previous ones as vmlinuz.bak and initrd.img.bak. The Pi always
+starts the newest kernel. rpi-eeprom-update keeps the Pi's bootloader (EEPROM) up to date, as on
+Ubuntu and Raspberry Pi OS.
+
+/usr/lib/netplan/00-mint-arm-network-manager.yaml hands every network device to NetworkManager,
+wired ones included, as Linux Mint's /etc/netplan/01-network-manager-all.yaml does (Ubuntu's
+Raspberry Pi settings package deletes that file whenever it is installed or updated).
+/usr/lib/NetworkManager/conf.d/zz-mint-arm-wifi-powersave-off.conf turns Wi-Fi power saving off,
+as Ubuntu's Raspberry Pi settings mean to.

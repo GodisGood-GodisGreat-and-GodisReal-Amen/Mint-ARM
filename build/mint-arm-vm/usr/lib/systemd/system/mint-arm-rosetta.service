@@ -1,6 +1,7 @@
 [Unit]
 Description=Apple Rosetta for x86-64 Linux programs
 After=local-fs.target systemd-binfmt.service
+ConditionVirtualization=vm
 
 [Service]
 Type=oneshot

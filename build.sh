@@ -1,30 +1,41 @@
 #!/bin/zsh
 # Build Linux Mint ARM from scratch on an Apple-silicon Mac, with one command.
 #
-# usage: ./build.sh [--keep-vm] [WORK_DIR]
+# usage: ./build.sh [--test-ssh] [--keep-vm] [WORK_DIR]
 #
 # Stage 00 starts an Ubuntu 24.04 arm64 build VM (QEMU with Apple's Hypervisor framework).
-# Stages 10 to 30 run inside it: they rebuild Linux Mint's packages for arm64, assemble the
-# system and pack the live ISO. Stage 40 preinstalls that ISO into a ready-to-run UTM virtual
-# machine with Mint's own installer. The ISO, the VM and the mint-arm-repo package (Mint's
-# packages for arm64, for updating systems made from an earlier release) land in out/.
+# Stages 10 to 30 run inside it: they rebuild Linux Mint's packages for arm64, assemble the system
+# and make the disk image that starts on a Raspberry Pi and in virtual machines. Stage 40 wraps
+# that image, prepared for a VM, as a ready-to-run UTM virtual machine. The image, the VM and the
+# mint-arm-repo package (Mint's packages for arm64, for updating systems made from an earlier
+# release) land in out/.
 #
+# --test-ssh also makes a test image that root can log in to over SSH with a key made here, in
+# work/pi-test/: for testing on a real Raspberry Pi, never for a release.
 # WORK_DIR (default: work/) keeps the build VM's disk, so running the command again after a
 # failure resumes instead of starting over; delete it to start clean. --keep-vm leaves the build
-# VM running at the end, for a look inside. About 35 minutes on an M4 Max; needs ~50 GB of disk.
-# See docs/building.md.
+# VM running at the end, for a look inside. About 40 minutes on an M4 Max; the build
+# needs ~60 GB of disk. See docs/building.md.
 emulate -L zsh
 setopt err_exit pipe_fail no_unset
 
 HERE=${0:A:h}
-KEEP_VM=0
-if [[ ${1:-} == --keep-vm ]]; then KEEP_VM=1; shift; fi
+KEEP_VM=0 TEST_SSH=0
+while [[ ${1:-} == --* ]]; do
+  case $1 in
+    --keep-vm) KEEP_VM=1 ;;
+    --test-ssh) TEST_SSH=1 ;;
+    *) print -ru2 -- "build.sh: unknown option $1"; exit 1 ;;
+  esac
+  shift
+done
 WORK=${${1:-$HERE/work}:a}
 OUT=${OUT:-$HERE/out}
 VM=$WORK/build-vm
 PORT=${BUILD_SSH_PORT:-2299}
-STAGES=(10-packages 15-mintarm 20-rootfs 30-iso)
-NEED_GB=50
+NAME=linuxmint-22.3-cinnamon-arm64-unofficial
+STAGES=(10-packages 15-mintarm 20-rootfs 30-image)
+NEED_GB=60
 
 log() { print -r -- "[$(date +%H:%M:%S)] $*" }
 took() { (( SECONDS - $1 < 90 )) && print -r -- "$(( SECONDS - $1 )) s" || print -r -- "$(( (SECONDS - $1 + 30) / 60 )) min" }
@@ -39,6 +50,10 @@ for tool in qemu-system-aarch64 qemu-img; do
   command -v $tool > /dev/null || die "$tool not found: install QEMU first (brew install qemu)"
 done
 mkdir -p $WORK/logs $OUT
+if (( TEST_SSH )); then
+  mkdir -p $WORK/pi-test
+  [[ -f $WORK/pi-test/id_ed25519 ]] || ssh-keygen -q -t ed25519 -N '' -C mint-arm-pi-test -f $WORK/pi-test/id_ed25519
+fi
 caffeinate -i -w $$ &   # no idle sleep until the build ends
 
 started=0 qemu_pid=
@@ -92,35 +107,55 @@ vm 'cloud-init status --wait > /dev/null 2>&1
 log "copying build/ into the VM"
 COPYFILE_DISABLE=1 bsdtar --no-mac-metadata --format ustar -C $HERE -cf - build \
   | vm 'rm -rf ~/build && tar -xf - --no-same-owner'
+(( TEST_SSH )) && vm 'cat > ~/pi-test.pub' < $WORK/pi-test/id_ed25519.pub
 
 # The stages see the Mac's time zone (for their log times) and any of these settings set here.
 tz=$(readlink /etc/localtime 2> /dev/null) tz=${tz#*zoneinfo/}
 settings="TZ=${tz:-UTC}"
-for name in JOBS PAR MINT_MIRROR UBUNTU_MIRROR SQUASHFS_COMP; do
+for name in JOBS PAR MINT_MIRROR UBUNTU_MIRROR; do
   [[ -n ${(P)name:-} ]] && settings+=" $name=${(qq)${(P)name}}"
 done
 for stage in $STAGES; do
+  stage_env=$settings
+  [[ $stage == 30-image ]] && (( TEST_SSH )) && stage_env+=' TEST_SSH_KEY=$HOME/pi-test.pub'
   log "stage $stage"
   t0=$SECONDS
-  vm "$settings bash ~/build/$stage.sh" < /dev/null 2>&1 | tee $WORK/logs/$stage.log \
+  vm "$stage_env bash ~/build/$stage.sh" < /dev/null 2>&1 | tee $WORK/logs/$stage.log \
     || die "stage $stage failed. Its output is in $WORK/logs/$stage.log, the detailed logs in the VM's /srv/mintarm/logs (--keep-vm keeps it running). Run ./build.sh again to resume."
   log "stage $stage done in $(took $t0)"
 done
 
-iso=$(vm 'cd /srv/mintarm/out && ls -t *.iso | head -1' < /dev/null)
-log "copying $iso to $OUT"
-vm "cat /srv/mintarm/out/$iso" < /dev/null > $OUT/$iso.part
-vm "cat /srv/mintarm/out/$iso.sha256" < /dev/null > $OUT/$iso.sha256
-mv $OUT/$iso.part $OUT/$iso
-(cd $OUT && shasum -a 256 -c $iso.sha256 > /dev/null) || die "the copied ISO does not match its checksum"
+# FILE in the VM, with its .sha256 next to it, into DIR on the Mac; checked
+copy_out() {
+  local file=$1 dir=$2 name=${1:t}
+  vm "cat $file" < /dev/null > $dir/$name.part
+  vm "cat $file.sha256" < /dev/null > $dir/$name.sha256
+  mv $dir/$name.part $dir/$name
+  (cd $dir && shasum -a 256 -c $name.sha256 > /dev/null) || die "the copied $name does not match its checksum"
+}
+log "copying $NAME.img.xz and the virtual machine's disk to $OUT"
+# an earlier build's results, including files this build no longer makes
+rm -f $OUT/linuxmint-22.3-cinnamon-arm64-*(N) $OUT/mint-arm-repo_*.deb(N)
+copy_out /srv/mintarm/out/$NAME.img.xz $OUT
+copy_out /srv/mintarm/out/$NAME-vm.qcow2 $OUT
+outputs=($OUT/$NAME.img.xz "$OUT/Linux Mint 22.3 ARM.utm")
+if (( TEST_SSH )); then
+  log "copying the SSH test image to $WORK/pi-test"
+  rm -f $WORK/pi-test/linuxmint-22.3-cinnamon-arm64-*(N)
+  copy_out /srv/mintarm/out-test/$NAME-TEST-ssh.img.xz $WORK/pi-test
+  # the test image's own SSH host key, so the first connection to it is checked
+  print -r -- "* $(vm 'cut -d" " -f1,2 /srv/mintarm/out-test/ssh_host_ed25519_key.pub' < /dev/null)" > $WORK/pi-test/known_hosts
+  outputs+=($WORK/pi-test/$NAME-TEST-ssh.img.xz)
+fi
 # The local archive as a package of its own: installing a newer one updates Mint's packages
 # in a system made from an earlier release.
 repo_deb=$(vm 'cd /srv/mintarm/mint-arm-repo && ls mint-arm-repo_*.deb' < /dev/null)
 vm "cat /srv/mintarm/mint-arm-repo/$repo_deb" < /dev/null > $OUT/$repo_deb
+outputs+=($OUT/$repo_deb)
 stop_vm
 
 log "stage 40-vm-image"
-$HERE/build/40-vm-image.sh $OUT/$iso $OUT 2>&1 | tee $WORK/logs/40-vm-image.log
+$HERE/build/40-vm-image.sh $OUT/$NAME-vm.qcow2 $OUT 2>&1 | tee $WORK/logs/40-vm-image.log
 
 log "finished in $(took 0):"
-du -sh $OUT/$iso "$OUT/Linux Mint 22.3 ARM.utm" $OUT/$repo_deb
+du -sh $outputs

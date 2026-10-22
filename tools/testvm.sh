@@ -9,6 +9,7 @@
 #   ISO   boot from this ISO, with DISK attached
 # env:  QMP_PORT (4450)       QMP on 127.0.0.1, for qmp.py
 #       QGA_PORT              the guest agent on 127.0.0.1, for qga.py (none when unset)
+#       SSH_PORT              forwards 127.0.0.1:SSH_PORT to the guest's port 22 (none when unset)
 #       SMP (6) MEM (8G) RES (1920x1080)
 #       KERNEL INITRD APPEND  boot a kernel directly instead of going through the firmware
 # The VM's UEFI variables and serial log are kept in work/testvms/NAME.
@@ -35,7 +36,7 @@ args=(
   -device qemu-xhci,id=xhci -device usb-kbd -device usb-tablet
   -device virtio-gpu-pci,xres=${RES%x*},yres=${RES#*x}
   -drive if=none,id=hd0,file=$DISK,format=qcow2,discard=unmap,cache=writeback -device virtio-blk-pci,drive=hd0,bootindex=1
-  -netdev user,id=n0 -device virtio-net-pci,netdev=n0
+  -netdev user,id=n0${SSH_PORT:+,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22} -device virtio-net-pci,netdev=n0
   -audiodev none,id=snd0 -device intel-hda -device hda-duplex,audiodev=snd0
   -device virtio-rng-pci
   -display none -monitor none -serial file:$DIR/serial.log

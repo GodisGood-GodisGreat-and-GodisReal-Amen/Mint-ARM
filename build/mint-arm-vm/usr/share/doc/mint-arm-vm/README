@@ -1,0 +1,6 @@
+Linux Mint ARM (unofficial arm64 build of Linux Mint 22.3 "Zena" Cinnamon): virtual machines
+
+What only virtual machines use (the system's first start removes this package on a Raspberry
+Pi). Firefox renders in software (/usr/lib/firefox/defaults/pref/mint-arm-vm.js), and
+the mint-arm-rosetta service registers Apple's Rosetta for x86-64 Linux programs when the VM
+runs under Apple's Virtualization framework with Rosetta sharing enabled.

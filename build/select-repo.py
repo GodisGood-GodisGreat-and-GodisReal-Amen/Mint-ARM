@@ -1,14 +1,16 @@
 #!/usr/bin/python3
 """Choose which Linux Mint packages go into the image's local "Linux Mint ARM" archive.
 
-usage: select-repo.py BUILD_REPO ROOTFS MINT_MAIN_PACKAGES OUT_DIR SIZE_LIMIT
+usage: select-repo.py BUILD_REPO ROOTFS MINT_MAIN_PACKAGES OUT_DIR SIZE_LIMIT [MANIFEST]
 
   - every arm64 package rebuilt from Mint's sources (except -dbg and -doc), and the packages
     made for this build (version suffix +arm64: patched Mint tools, Firefox locale transitions)
   - any Mint package Ubuntu ships a higher-numbered version of: its entry carries the 700
     pin that keeps Mint's version installed (as Mint's own repository pin does)
   - Mint's arch:all packages up to SIZE_LIMIT bytes that belong to a rebuilt source, are
-    installed in the image, or are Mint applications (Mint's "main" component)
+    installed in the image, are in the original Linux Mint selection (MANIFEST: so what this
+    build leaves out installs as Linux Mint ships it), or are Mint applications (Mint's "main"
+    component)
 Run inside the build VM with the rootfs apt lists still present (needs python3-apt).
 """
 import glob
@@ -21,6 +23,9 @@ import apt_pkg
 
 build_repo, rootfs, main_list, out_dir, limit = sys.argv[1:6]
 limit = int(limit)
+in_manifest = set()
+if len(sys.argv) > 6:
+    in_manifest = {line.split()[0].split(':')[0] for line in open(sys.argv[6]) if line.strip()}
 
 apt_pkg.init_config()
 apt_pkg.config.set('Dir', rootfs)
@@ -69,7 +74,8 @@ for name, (path, version, arch, source) in sorted(newest.items()):
     ubuntu = ubuntu_version(name)
     if ubuntu and apt_pkg.version_compare(ubuntu, version) > 0:
         chosen.append(path)
-    elif os.path.getsize(path) <= limit and (source in rebuilt_sources or installed(name) or name in mint_main):
+    elif os.path.getsize(path) <= limit and (source in rebuilt_sources or installed(name) or name in mint_main
+                                             or name in in_manifest):
         chosen.append(path)
 
 for path in chosen:

@@ -1,12 +1,17 @@
 #!/bin/bash
-# Linux Mint ARM build, stage 20 (in the build VM): assemble the live root filesystem (casper
-# layout) in $W/rootfs from Ubuntu ports and the rebuilt Mint packages, following the original
-# Mint 22.3 manifest trimmed by packages.conf. Runs after 10-packages.sh and 15-mintarm.sh.
+# Linux Mint ARM build, stage 20 (in the build VM): assemble the system in $W/rootfs from Ubuntu
+# ports and the rebuilt Mint packages, following the original Mint 22.3 manifest trimmed by
+# packages.conf. One system for the Raspberry Pi and for virtual machines: it carries both
+# machines' kernels and boot tools, and its first start removes the half it does not use
+# (mint-arm-system's first-start service). It is prepared for Linux Mint's first-start setup the
+# way Mint's installer prepares an OEM installation. Runs after 10-packages.sh and 15-mintarm.sh;
+# 30-image.sh makes the disk images.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/lib.sh"
 R=$W/rootfs
+L=$W/logs/rootfs   # log file prefix
 UBUNTU_MIRROR=${UBUNTU_MIRROR:-http://ports.ubuntu.com/ubuntu-ports}
 SUITE=noble
 MANIFEST=$HERE/mint-22.3-cinnamon-amd64.manifest
@@ -64,38 +69,41 @@ configure_apt() {
   echo "deb [trusted=yes] file:/mnt/mintarm-repo ./" | sudo tee "$R/etc/apt/sources.list.d/zz-mintarm-build.list" > /dev/null
   printf 'Package: *\nPin: release o=%s\nPin-Priority: 700\n' "$REPO_ORIGIN" \
     | sudo tee "$R/etc/apt/preferences.d/zz-mintarm-build.pref" > /dev/null
-  in_root apt-get -q update > "$W/logs/rootfs-apt-update.log"
-  # Mozilla's apt source and pin come with mint-arm-system; Mint's key with linuxmint-keyring
-  in_root "${APT[@]}" install mint-arm-system linuxmint-keyring > "$W/logs/rootfs-base.log"
-  in_root apt-get -q update >> "$W/logs/rootfs-apt-update.log"
+  in_root apt-get -q update > "$L-apt-update.log"
+  # Mozilla's apt source and pin come with mint-arm-system; Mint's key with linuxmint-keyring.
+  # mint-arm-pi brings the Raspberry Pi kernel, which asks for linux-firmware:
+  # linux-firmware-minimal (empty) stands in for Ubuntu's whole firmware set when it goes in at
+  # the same time.
+  in_root "${APT[@]}" install mint-arm-system mint-arm-vm mint-arm-pi linuxmint-keyring linux-firmware-minimal \
+    > "$L-base.log"
+  in_root apt-get -q update >> "$L-apt-update.log"
 }
 
 install_packages() {
   in_root apt-cache pkgnames | sort -u > "$W/rootfs-available.txt"
-  python3 "$HERE/select-packages.py" "$MANIFEST" "$HERE/packages.conf" "$HERE/roots.txt" \
-    "$W/rootfs-available.txt" "$W/rootfs-install.txt" "$W/rootfs-manual.txt"
+  python3 "$HERE/select-packages.py" "$MANIFEST" "$HERE/roots.txt" "$W/rootfs-available.txt" \
+    "$W/rootfs-install.txt" "$W/rootfs-manual.txt" "$HERE/packages.conf"
   log "installing $(wc -l < "$W/rootfs-install.txt") packages"
-  if ! in_root "${APT[@]}" install $(cat "$W/rootfs-install.txt") > "$W/logs/rootfs-install.log" 2>&1; then
-    grep -E '^(E:| )' "$W/logs/rootfs-install.log" | tail -40; return 1
+  if ! in_root "${APT[@]}" install $(cat "$W/rootfs-install.txt") > "$L-install.log" 2>&1; then
+    grep -E '^(E:| )' "$L-install.log" | tail -40; return 1
   fi
   # debootstrap installs from the release pocket; bring every package to its current update
-  in_root "${APT[@]}" dist-upgrade > "$W/logs/rootfs-upgrade.log" 2>&1
-  log "upgraded $(grep -c '^Setting up ' "$W/logs/rootfs-upgrade.log" || true) packages to their current updates"
+  in_root "${APT[@]}" dist-upgrade > "$L-upgrade.log" 2>&1
+  log "upgraded $(grep -c '^Setting up ' "$L-upgrade.log" || true) packages to their current updates"
 }
 
 prune() {
   in_root dpkg-query -W -f '${Package}\n' | sort -u > "$W/rootfs-installed.txt"
   in_root apt-mark auto $(cat "$W/rootfs-installed.txt") > /dev/null
   in_root apt-mark manual $(comm -12 "$W/rootfs-installed.txt" <(sort -u "$W/rootfs-manual.txt")) > /dev/null
-  in_root "${APT[@]}" --purge autoremove > "$W/logs/rootfs-autoremove.log"
-  log "autoremoved $(grep -c '^Removing ' "$W/logs/rootfs-autoremove.log" || true) packages only needed by dropped software"
+  in_root "${APT[@]}" --purge autoremove > "$L-autoremove.log"
+  log "autoremoved $(grep -c '^Removing ' "$L-autoremove.log" || true) packages only needed by dropped software"
 }
 
 configure_system() {
   echo mint | sudo tee "$R/etc/hostname" > /dev/null
   printf '127.0.0.1\tlocalhost\n127.0.1.1\tmint\n\n::1\tip6-localhost ip6-loopback\nfe00::0\tip6-localnet\nff00::0\tip6-mcastprefix\nff02::1\tip6-allnodes\nff02::2\tip6-allrouters\n' \
     | sudo tee "$R/etc/hosts" > /dev/null
-  : | sudo tee "$R/etc/fstab" > /dev/null
   echo LANG=C.UTF-8 | sudo tee "$R/etc/default/locale" > /dev/null
   printf 'XKBMODEL="pc105"\nXKBLAYOUT="us"\nXKBVARIANT=""\nXKBOPTIONS=""\n\nBACKSPACE="guess"\n' \
     | sudo tee "$R/etc/default/keyboard" > /dev/null
@@ -104,6 +112,11 @@ configure_system() {
   sudo mkdir -p "$R/etc/netplan"
   printf 'network:\n  version: 2\n  renderer: NetworkManager\n' | sudo tee "$R/etc/netplan/01-network-manager-all.yaml" > /dev/null
   sudo chmod 600 "$R/etc/netplan/01-network-manager-all.yaml"
+  # the image's partitions (30-image.sh), by label as on Ubuntu's Raspberry Pi images; fstrim.timer
+  # trims them weekly. In a virtual machine, the first start mounts the boot partition at /boot/efi.
+  printf 'LABEL=writable\t/\text4\tdefaults\t0\t1\nLABEL=system-boot\t/boot/firmware\tvfat\tdefaults\t0\t1\n' \
+    | sudo tee "$R/etc/fstab" > /dev/null
+  sudo mkdir -p "$R/boot/firmware"
   sudo tee "$R/etc/default/grub" > /dev/null <<'EOF'
 # If you change this file, run 'update-grub' afterwards to update
 # /boot/grub/grub.cfg.
@@ -123,6 +136,14 @@ EOF
 # Mint's small arch:all packages, and any Mint package Ubuntu ships a newer-numbered version
 # of. Its 700 pin keeps Mint's versions in place across Ubuntu updates, as Mint's own repo does.
 make_repo_package() {
+  local pkg=$W/mint-arm-repo deb
+  build_repo_package
+  deb=$(ls "$pkg"/mint-arm-repo_*.deb)
+  sudo cp "$deb" "$R/tmp/"
+  in_root dpkg -i "/tmp/${deb##*/}" > /dev/null
+  sudo rm -f "$R"/tmp/mint-arm-repo_*.deb
+}
+build_repo_package() {
   export GNUPGHOME=$W/gnupg
   if [ ! -d "$GNUPGHOME" ]; then
     mkdir -m 700 -p "$GNUPGHOME"
@@ -134,7 +155,7 @@ make_repo_package() {
   cat "$W"/aptall/lists/*_dists_"$MINT_SUITE"_main_binary-amd64_Packages \
     | grep-dctrl -n -s Package -F Architecture -X all | sort -u > "$W/mint-main.txt"
   log "mint-arm-repo selection: $(python3 "$HERE/select-repo.py" "$W/repo" "$R" "$W/mint-main.txt" \
-         "$root/usr/share/mint-arm/repo" "$REPO_FILE_LIMIT")"
+         "$root/usr/share/mint-arm/repo" "$REPO_FILE_LIMIT" "$MANIFEST")"
   index_repo "$root/usr/share/mint-arm/repo"
   gpg --batch --yes --clearsign -o "$root/usr/share/mint-arm/repo/InRelease" "$root/usr/share/mint-arm/repo/Release"
   install -d "$root/usr/share/keyrings" "$root/etc/apt/sources.list.d" "$root/etc/apt/preferences.d"
@@ -159,37 +180,43 @@ Description: Linux Mint ARM64 package archive
 EOF
   chmod -R go-w "$root"
   dpkg-deb --root-owner-group -Zxz --build "$root" "$pkg/" > /dev/null
-  sudo cp "$pkg"/mint-arm-repo_*.deb "$R/tmp/"
-  in_root dpkg -i /tmp/"$(basename "$pkg"/mint-arm-repo_*.deb)" > /dev/null
-  sudo rm -f "$R"/tmp/mint-arm-repo_*.deb
   log "mint-arm-repo: $(find "$root/usr/share/mint-arm/repo" -name '*.deb' | wc -l) packages, $(du -sh "$root/usr/share/mint-arm/repo" | cut -f1)"
 }
 
-# What the installer needs from the medium: the packages it removes from the installed
-# system (Mint's own list, as installed here) and an offline pool with what OEM installs
-# put back on it (oem-config and the parts of Ubiquity it uses).
-installer_media() {
+# The system gets what Ubiquity's OEM installation did to the virtual machine of earlier releases:
+# the live-only packages come out (Mint's list, the same the installer removes), the first-start
+# wizard goes back in with the temporary "oem" account it deletes when it is done, and the system
+# starts into that wizard. Before the wizard, the first-start service removes what the machine
+# does not use (the build leaves it the marker that it is pending).
+first_start() {
+  local extra
   in_root dpkg-query -W -f '${Package}\n' | sort -u > "$W/installed.names"
-  sed 's/:.*//' "$HERE/mint-22.3-cinnamon-amd64.manifest-remove" | sort -u \
-    | grep -v -E '^(grub-efi-|shim-signed)' | comm -12 - "$W/installed.names" > "$W/filesystem.manifest-remove"
-  # Ubiquity installs oem-config-gtk in OEM mode; ask apt what that downloads on the installed
-  # system, i.e. this package database minus the live-only packages.
-  python3 - "$W/filesystem.manifest-remove" "$R/var/lib/dpkg/status" <<'EOF' | sudo tee "$R/tmp/status.target" > /dev/null
-import sys
-drop = {line.strip() for line in open(sys.argv[1]) if line.strip()}
-for stanza in open(sys.argv[2]).read().split('\n\n'):
-    if stanza.strip() and stanza.split('\n', 1)[0].split(': ', 1)[-1] not in drop:
-        sys.stdout.write(stanza.strip('\n') + '\n\n')
-EOF
-  local get
-  get=$(in_root apt-get -s -o Dir::State::status=/tmp/status.target install --no-install-recommends oem-config-gtk \
-        | awk '/^Inst /{print $2}')
-  sudo rm -f "$R/tmp/status.target"
-  rm -rf "${W:?}/pool" && mkdir -p "$W/pool"
-  sudo rm -rf "$R/tmp/pool" && sudo mkdir -p "$R/tmp/pool"
-  in_root sh -c "cd /tmp/pool && apt-get -q download $(echo $get)" > "$W/logs/pool.log" 2>&1
-  cp "$R"/tmp/pool/*.deb "$W/pool/" && sudo rm -rf "$R/tmp/pool"
-  log "installer: removes $(wc -l < "$W/filesystem.manifest-remove") live-only packages, pool of $(ls "$W/pool" | wc -l)"
+  # (less GRUB and shim, which Mint's installer removes on PCs but virtual machines start with)
+  sed 's/:.*//' "$HERE/mint-22.3-cinnamon-amd64.manifest-remove" | sort -u | grep -v -E '^(grub-efi-|shim-signed)' \
+    | comm -12 - "$W/installed.names" > "$W/live-only.txt"
+  # what else removing them takes along (expected: nothing the system needs)
+  extra=$(in_root apt-get -s purge $(cat "$W/live-only.txt") | awk '/^Purg /{print $2}' | sort \
+          | comm -23 - "$W/live-only.txt" | xargs)
+  {
+    in_root "${APT[@]}" purge $(cat "$W/live-only.txt") \
+      && in_root "${APT[@]}" install oem-config-gtk \
+      && in_root "${APT[@]}" --purge autoremove
+  } > "$L-firststart.log" 2>&1 || { grep -E '^(E:|W:| )' "$L-firststart.log" | tail -20; return 1; }
+  in_root useradd -d /home/oem -G adm,sudo -m -N -u 29999 oem
+  in_root passwd -l oem > /dev/null
+  in_root oem-config-prepare --quiet
+  sudo install -d "$R/var/lib/mint-arm" && sudo touch "$R/var/lib/mint-arm/first-start-pending"
+  # the initrds as the system now stands (made, for a kernel that went in before initramfs-tools)
+  local kver
+  : > "$L-initramfs.log"
+  for kver in $(in_root linux-version list); do
+    if [ -e "$R/boot/initrd.img-$kver" ]; then
+      in_root update-initramfs -u -k "$kver" >> "$L-initramfs.log" 2>&1
+    else
+      in_root update-initramfs -c -k "$kver" >> "$L-initramfs.log" 2>&1
+    fi
+  done
+  log "first start: $(wc -l < "$W/live-only.txt") live-only packages removed${extra:+ (with them: $extra)}, oem-config prepared"
 }
 
 finish() {
@@ -219,5 +246,5 @@ install_packages
 prune
 configure_system
 make_repo_package
-installer_media
+first_start
 finish

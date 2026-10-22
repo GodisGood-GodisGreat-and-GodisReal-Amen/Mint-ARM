@@ -15,3 +15,14 @@
          global meta_names
          for meta in _metas:
              shortname = meta.split(":")[0]
+@@ -75,6 +83,10 @@
+                 active_kernel_type = "-" + active_kernel.version.split("-")[-1]
+             except:
+                 active_kernel_type = CONFIGURED_KERNEL_TYPE
++            # A kernel flavour Update Manager does not know (the Raspberry Pi's -raspi) is kept
++            # current by its own metapackage, as an ordinary update: offer no other kernel line.
++            if active_kernel_type not in SUPPORTED_KERNEL_TYPES:
++                return
+             if  active_kernel_type != CONFIGURED_KERNEL_TYPE:
+                 active_kernel.series = ("0","0","0")
+ 

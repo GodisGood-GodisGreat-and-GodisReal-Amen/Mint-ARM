@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 — TODO-RELEASE-DATE
+
+- **One image for virtual machines and the Raspberry Pi.** `linuxmint-22.3-cinnamon-arm64-unofficial.img.xz` starts in a virtual machine (UEFI, GRUB, the hardware-enablement kernel) and on a Raspberry Pi 4, 400, CM4, 5, 500 or CM5 (the Pi's firmware, Ubuntu's Raspberry Pi kernel with the Pi's firmware only), from the same boot partition. At its first start it removes what its machine does not use: in a VM the Raspberry Pi's kernel, firmware and boot tools, and Bluetooth, Wi-Fi, printing and scanning; on a Pi the VM's kernel, GRUB and guest tools. It then runs Linux Mint's setup. The ready-made UTM VM is that image on a 64 GB disk, with its first start in a VM already done.
+- **On the Raspberry Pi**: written with Raspberry Pi Imager, laid out like Ubuntu's Raspberry Pi images; the system grows to fill the card; the Pi's GPU draws the desktop and Firefox; Wi-Fi (power saving off), Bluetooth, sound and the GPIO header work; kernel updates go onto the boot partition through `flash-kernel`, and the bootloader keeps itself up to date as on Ubuntu and Raspberry Pi OS.
+- **No ISO any more.** The image comes installed, so the live session, the installer and `casper` are gone. A VM of your own takes the image as its disk, Apple's Virtualization framework (for Rosetta) included.
+- **Update Manager** offers no other kernel line when the running kernel is of a flavour it does not support, the Raspberry Pi's: it used to offer Ubuntu's generic PC kernel there.
+- **Settings in three packages**: `mint-arm-system` keeps what every machine shares and the first-start service, `mint-arm-vm` the VM's Firefox rendering setting and the Rosetta service, `mint-arm-pi` the Pi's boot chain. A VM from 1.0.0 that installs this release's `mint-arm-repo` package gets `mint-arm-vm` automatically through Update Manager, which updates itself first and offers the rest at its next check.
+- **The build** makes the image and the VM (`./build.sh`), and with `--test-ssh` a test image that can be reached over SSH, for testing on a real Pi. New test tools: `testpi.sh` starts the image as a Raspberry Pi does, in QEMU on the Mac, and `pitest.sh` checks a Pi over SSH.
+
 ## 1.0.0 — 2026-10-21
 
 First public release, in the public domain (The Unlicense).

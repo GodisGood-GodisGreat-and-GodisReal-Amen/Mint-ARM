@@ -10,6 +10,7 @@ usage: plan.py fetch INDEX_DIR [MINT_SUITE] [UBUNTU_SUITE]
        plan.py plan INDEX_DIR MANIFEST PACKAGES_CONF [ROOTS_OUT]
          MANIFEST is casper/filesystem.manifest from Linux Mint's x86 ISO, for example
          bsdtar -xOf linuxmint-22.3-cinnamon-64bit.iso casper/filesystem.manifest
+         PACKAGES_CONF is build/packages.conf; its [drop-*] sections apply
 """
 import collections
 import fnmatch
@@ -76,7 +77,7 @@ def plan(index_dir, manifest_path, conf_path, roots_out=None):
             section = line.strip('[]')
         elif line:
             conf[section] += line.split()
-    drops = conf['drop-x86'] + conf['drop-vm'] + conf['drop-light']
+    drops = [p for name, patterns in conf.items() if name and name.startswith('drop-') for p in patterns]
 
     def dropped(name):
         return any(fnmatch.fnmatchcase(name, pattern) for pattern in drops)

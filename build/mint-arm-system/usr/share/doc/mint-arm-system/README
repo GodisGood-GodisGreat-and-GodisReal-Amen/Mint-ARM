@@ -1,5 +1,13 @@
 Linux Mint ARM (unofficial arm64 build of Linux Mint 22.3 "Zena" Cinnamon)
 
+One system runs on the Raspberry Pi 4 and 5 and in virtual machines. At its first start,
+mint-arm-first-start.service (/usr/lib/mint-arm/first-start) removes what the machine does not
+use, listed in /usr/share/mint-arm/remove-on-vm and remove-on-pi, and sets the boot partition up
+for it: /boot/firmware with the Raspberry Pi's boot files on a Pi, /boot/efi with GRUB in a
+virtual machine. What Linux Mint's setup wizard still needs goes right after it
+(mint-arm-first-start-late.service). The journal has their output
+(journalctl -u mint-arm-first-start -u mint-arm-first-start-late).
+
 This is not an official Linux Mint release. Ubuntu packages come from ports.ubuntu.com,
 Firefox from packages.mozilla.org, and Linux Mint's own packages were rebuilt for arm64
 from Linux Mint's published source packages.

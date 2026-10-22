@@ -1,30 +1,35 @@
 #!/usr/bin/python3
-"""Turn the original Linux Mint manifest plus packages.conf into the arm64 install list.
+"""Turn the original Linux Mint manifest plus the package lists into the install list.
 
-usage: select-packages.py MANIFEST PACKAGES_CONF ROOTS AVAILABLE INSTALL_OUT MANUAL_OUT
+usage: select-packages.py MANIFEST ROOTS AVAILABLE INSTALL_OUT MANUAL_OUT CONF [CONF ...]
   AVAILABLE   package names the arm64 chroot's apt can install (apt-cache pkgnames)
   INSTALL_OUT packages to install
   MANUAL_OUT  packages to mark as manually installed (everything else becomes automatic,
               so packages only needed by dropped applications are autoremoved)
+  CONF        packages.conf (more files add their sections up); every [drop-*] section drops,
+              and the [remove-on-*] sections are for the first start, not for here
 """
 import collections
 import fnmatch
 import sys
 
-manifest, conf_path, roots_path, avail_path, install_out, manual_out = sys.argv[1:7]
+manifest, roots_path, avail_path, install_out, manual_out = sys.argv[1:6]
+conf_paths = sys.argv[6:]
 
 conf = collections.defaultdict(list)
-section = None
-for line in open(conf_path):
-    line = line.split('#')[0].strip()
-    if not line:
-        continue
-    if line.startswith('['):
-        section = line.strip('[]')
-        continue
-    conf[section] += line.split()
+for conf_path in conf_paths:
+    section = None
+    for line in open(conf_path):
+        line = line.split('#')[0].strip()
+        if not line:
+            continue
+        if line.startswith('['):
+            section = line.strip('[]')
+            continue
+        conf[section] += line.split()
 
-drops = conf['drop-x86'] + conf['drop-vm'] + conf['drop-light']
+drops = [pattern for section, patterns in conf.items() if section and section.startswith('drop-')
+         for pattern in patterns]
 
 def dropped(name):
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in drops)

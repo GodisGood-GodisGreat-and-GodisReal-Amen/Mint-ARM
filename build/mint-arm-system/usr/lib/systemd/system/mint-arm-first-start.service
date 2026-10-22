@@ -1,0 +1,16 @@
+[Unit]
+Description=Linux Mint ARM: remove what this machine does not use, before the setup
+Documentation=file:///usr/share/doc/mint-arm-system/README
+ConditionPathExists=/var/lib/mint-arm/first-start-pending
+# for looking at the image as it was built (tools/make-release.sh)
+ConditionKernelCommandLine=!mint-arm.first-start=no
+After=local-fs.target growroot-almost.service mkswap.service
+Before=oem-config.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mint-arm/first-start
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=oem-config.target
