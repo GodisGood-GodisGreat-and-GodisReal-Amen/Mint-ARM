@@ -1,6 +1,6 @@
 # Linux Mint ARM
 
-Linux Mint 22.3 "Zena" with Cinnamon, rebuilt for ARM64. One image runs at native speed in a virtual machine on a Mac with Apple silicon, and on a Raspberry Pi 4 or 5: at its first start it sees which of the two it is on, and removes what the other needs. It comes ready to run in [UTM](https://mac.getutm.app), and as the image itself, for a Pi's card or a VM of your own. Both are made from the package list of the official x86 ISO, trimmed to be light: 4.67 GB installed in a VM instead of Linux Mint's 8.35 GB.
+Linux Mint 22.3 "Zena" with Cinnamon, rebuilt for ARM64. One image runs at native speed in a virtual machine on a Mac with Apple silicon, and on a Raspberry Pi 4 or 5: at its first start it sees which of the two it is on, and removes what the other needs. It comes ready to run in [UTM](https://mac.getutm.app), installed with one command; as the image itself, for a Pi's card (Raspberry Pi Imager can list it) or a VM of your own; and as a live/install ISO for those who would rather install it themselves. All are made from the package list of the official x86 ISO, trimmed to be light: 4.25 GB installed in a VM instead of Linux Mint's 8.35 GB.
 
 This is an **unofficial** build. The Linux Mint team did not make it, does not endorse it and does not support it.
 
@@ -10,14 +10,15 @@ This is an **unofficial** build. The Linux Mint team did not make it, does not e
 
 - **The real Linux Mint, on ARM.** You get Cinnamon 6.6.9, Nemo and the X-Apps, plus Update Manager, Software Manager, Timeshift, Mint's first-start setup and Mint's themes and artwork. All 48 Linux Mint source packages that contain compiled code were rebuilt for ARM64 from Linux Mint's published sources. Mint's other packages are used as published.
 - **One image, two kinds of machine.** The same image starts in a virtual machine (UEFI, GRUB, the hardware-enablement kernel) and on a Raspberry Pi (its firmware, Ubuntu's Raspberry Pi kernel). Its first start removes the half its machine does not use, then Linux Mint's setup asks for your language, keyboard, time zone and account.
-- **Ready in three clicks.** Unzip the virtual machine, double-click it, press Play.
+- **Ready in one command.** One line in Terminal installs UTM if it is missing, downloads the virtual machine, checks it and opens it in UTM. By hand it is three clicks: unzip, double-click, Play.
+- **Or install it yourself.** The live/install ISO has Linux Mint's own installer, for virtual machines: choose the disk, the partitions and encryption, as on a PC.
 - **On a Raspberry Pi 4 or 5.** The Pi 4, 400 and CM4 and the Pi 5, 500 and CM5, written with Raspberry Pi Imager. It runs Ubuntu's Raspberry Pi kernel and desktop settings, with the Pi's own firmware for its GPU, Wi-Fi, Bluetooth and sound, and the system grows to fill the card at its first start. **Not yet tested on a real Pi**: this release was tested with the Pi's kernel in QEMU on a Mac ([what was tested](docs/architecture.md#tested-for-each-release)).
 - **A GPU-accelerated desktop.** The Mac's GPU draws the desktop through Metal (UTM's *GPU Supported* display). glmark2 scores 1,608 instead of 162 on the CPU-drawn display, and the idle desktop costs the Mac 4.9 % of one core instead of 13.4 %.
-- **Light.** About 1,580 packages in a VM instead of 2,005. A VM keeps no firmware or driver for hardware it doesn't have, and a Pi keeps only its own firmware. There is no live session or installer to carry. LibreOffice and the other large applications are one click away in the Software Manager.
+- **Light.** About 1,580 packages in a VM instead of 2,005. A VM keeps no firmware or driver for hardware it doesn't have, and a Pi keeps only its own firmware. There is no live session or installer to carry (the ISO has them), and identical files are stored once. LibreOffice and the other large applications are one click away in the Software Manager.
 - **Made for a virtual machine.** Swap is compressed in RAM. Clipboard sharing, automatic resizing, shared folders and the QEMU guest agent work out of the box, and VMware Fusion's tools are installed. Under Apple's Virtualization framework, Rosetta can run x86-64 Linux programs ([manual](docs/manual.md#8-rosetta-for-x86-64-programs)).
 - **Updates keep working.** Update Manager brings Ubuntu's base and security updates from Ubuntu's ARM mirrors, and Software Sources is patched to offer them; Update Manager is patched too, so it keeps the right kernel, in the VM and on the Pi. Firefox is Mozilla's own ARM64 build, updated by Mozilla. Linux Mint's versions of its packages stay pinned, as on any Mint system.
 - **Quick.** In a VM, the kernel and services are up in 1.5 seconds. The desktop runs in 0.9 GB of memory.
-- **Rebuilt with one command.** `./build.sh` makes the image and the virtual machine from scratch on a Mac, in about 40 minutes on an M4 Max.
+- **Rebuilt with one command.** `./build.sh` makes the image, the virtual machine and the ISO from scratch on a Mac, in about 45 minutes on an M4 Max.
 
 | First start | Firefox, native ARM64 | Software Sources, Ubuntu's ARM mirrors |
 | --- | --- | --- |
@@ -25,7 +26,15 @@ This is an **unofficial** build. The Linux Mint team did not make it, does not e
 
 ## Quick start
 
-You need a Mac with Apple silicon and [UTM](https://mac.getutm.app) 4.7 or newer (free).
+On a Mac with Apple silicon, paste this into Terminal:
+
+```bash
+/bin/zsh -c "$(curl -fsSL https://raw.githubusercontent.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM/main/install.sh)"
+```
+
+It installs [UTM](https://mac.getutm.app) (free) if it is missing, after asking; downloads the virtual machine, checks it against the release's checksums and opens it in UTM. Press **Play**: Linux Mint's setup asks for your language, keyboard, time zone and account, then starts the desktop.
+
+By hand, with UTM 4.7 or newer:
 
 1. Download `linuxmint-22.3-cinnamon-arm64-unofficial-utm.zip` from the [latest release](https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM/releases/latest), and double-click it to unzip it.
 2. Double-click **Linux Mint 22.3 ARM.utm**. UTM opens and adds it to its list.
@@ -33,15 +42,15 @@ You need a Mac with Apple silicon and [UTM](https://mac.getutm.app) 4.7 or newer
 
 **On a Raspberry Pi** 4 or 5, with [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
 
-1. Download `linuxmint-22.3-cinnamon-arm64-unofficial.img.xz` from the same release.
-2. In Raspberry Pi Imager, choose your Pi, then **Use custom** at the end of the list of systems and the downloaded file, then your microSD card (16 GB or more). Write it.
+1. In Imager 2.0 or newer, click **App Options**, then **Edit** next to **Content Repository**, choose **Use custom URL**, paste `https://raw.githubusercontent.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM/main/imager/os_list.json` and click **Apply & Restart**. (Or download `linuxmint-22.3-cinnamon-arm64-unofficial.img.xz` from the same release and choose **Use custom** at the end of Imager's list.)
+2. Choose your Pi, then **Linux Mint ARM 22.3 Cinnamon (unofficial)**, then your microSD card (16 GB or more). Write it.
 3. Put the card in the Pi, connect the screen, keyboard and mouse, then the power. Linux Mint's setup starts once the system has grown to fill the card and removed what only virtual machines use.
 
-The [startup guide](docs/getting-started.md) covers the image in a VM of your own, the Raspberry Pi in more detail, checking the downloads and the first things to do.
+The [startup guide](docs/getting-started.md) covers the image in a VM of your own, the Raspberry Pi in more detail, installing from the ISO, checking the downloads and the first things to do.
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md): requirements, the ready-made VM, the image in a VM of your own, the Raspberry Pi, first steps.
+- [Getting started](docs/getting-started.md): requirements, the ready-made VM (one command, or by hand), the image in a VM of your own, the Raspberry Pi, installing from the ISO, first steps.
 - [User manual](docs/manual.md): everything that differs from Linux Mint on a PC, including the display, sharing with the Mac, updates, software, memory, Rosetta, the VM's settings, and the Raspberry Pi.
 - [Building it yourself](docs/building.md): the one-command build, its stages, changing what goes in, and the test tools.
 - [How it works](docs/architecture.md): the package rebuild, the pinned local archive, the image and its two ways to start, the first start.

@@ -1,5 +1,5 @@
 Package: mint-arm-system
-Version: 22.3.6
+Version: 22.3.7
 Architecture: all
 Maintainer: Linux Mint ARM local build <mint-arm@localhost>
 Depends: systemd-zram-generator, mint-arm-vm | mint-arm-pi
@@ -14,6 +14,8 @@ Description: Linux Mint ARM64 system settings
     GRUB and guest tools on a Raspberry Pi
   - compressed RAM swap (zram) and matching memory settings
   - a smaller systemd journal
+  - Ubuntu's generic kernel installs without the device trees of physical boards, which no
+    virtual machine uses (about 100 MB less); the Raspberry Pi kernel keeps its own
   - Firefox from Mozilla's arm64 apt repository, with Linux Mint's Firefox defaults
   - Ubuntu's snap-only Firefox, Thunderbird and Chromium packages are hidden, as
     Linux Mint hides snapd

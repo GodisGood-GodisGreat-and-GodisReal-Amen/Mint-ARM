@@ -32,9 +32,12 @@ reindex() {
 setup() {
   sudo apt-get -qq update
   sudo apt-get -y -qq install --no-install-recommends build-essential devscripts equivs debhelper fakeroot \
-    dpkg-dev apt-utils debootstrap dosfstools rsync zstd python3-apt gnupg curl dctrl-tools > /dev/null
+    dpkg-dev apt-utils debootstrap dosfstools squashfs-tools xorriso mtools rsync zstd python3-apt gnupg curl \
+    dctrl-tools > /dev/null
   sudo mkdir -p "$W"/{src,repo/arm64,repo/all,logs,aptall/lists/partial,aptall/archives/partial}
-  sudo chown -R "$(id -un):" "$W"
+  # (not -R on $W itself: it also holds the systems that later stages assemble as root)
+  sudo chown "$(id -un):" "$W"
+  sudo chown -R "$(id -un):" "$W"/{src,repo,logs,aptall}
   sudo chmod 755 "$W" "$W/repo"
   if ! gpg -q --show-keys --with-colons /usr/share/keyrings/linuxmint-keyring.gpg 2>/dev/null | grep -q "^fpr:::::::::$MINT_KEY_FPR:" \
      || [ "$(file -b /usr/share/keyrings/linuxmint-keyring.gpg)" = "PGP public key block Public-Key (old)" ]; then

@@ -9,12 +9,13 @@ jobs:
         run: sudo apt-get install -y -qq zsh > /dev/null
       - name: Shell syntax
         run: |
-          for f in build/10-packages.sh build/15-mintarm.sh build/20-rootfs.sh build/30-image.sh build/lib.sh; do bash -n "$f"; done
+          for f in build/10-packages.sh build/15-mintarm.sh build/20-rootfs.sh build/30-image.sh build/35-iso.sh build/lib.sh; do bash -n "$f"; done
           sh -n build/mint-arm-system/usr/lib/mint-arm/first-start
-          for f in build.sh build/00-build-vm.sh build/40-vm-image.sh tools/*.sh; do zsh -n "$f"; done
+          [ ! -f imager/os_list.json ] || python3 -m json.tool imager/os_list.json > /dev/null
+          for f in build.sh install.sh build/00-build-vm.sh build/40-vm-image.sh tools/*.sh; do zsh -n "$f"; done
       - name: ShellCheck (stages that run in the build VM, and the first-start script)
         run: |
-          shellcheck --severity=error build/10-packages.sh build/15-mintarm.sh build/20-rootfs.sh build/30-image.sh build/lib.sh
+          shellcheck --severity=error build/10-packages.sh build/15-mintarm.sh build/20-rootfs.sh build/30-image.sh build/35-iso.sh build/lib.sh
           shellcheck -s sh build/mint-arm-system/usr/lib/mint-arm/first-start
       - name: Python syntax
         run: python3 -m py_compile build/*.py tools/*.py
@@ -38,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: zsh syntax
-        run: for f in build.sh build/00-build-vm.sh build/40-vm-image.sh tools/*.sh; do zsh -n "$f"; done
+        run: for f in build.sh install.sh build/00-build-vm.sh build/40-vm-image.sh tools/*.sh; do zsh -n "$f"; done
       - name: The test tools compile
         run: |
           swiftc -typecheck tools/vzvm.swift

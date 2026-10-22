@@ -1,10 +1,14 @@
 # Troubleshooting
 
+**The one-command install stops with an error.** It says what went wrong and changes nothing it has not finished. *Not a Mac with Apple silicon*: the virtual machine needs an M1 or newer. *Not enough space*: it needs 6 GB free on the disk of the target folder. *Already there*: a `Linux Mint 22.3 ARM.utm` is in the folder, perhaps your system: move or rename it, or choose another folder (`--dir`); it is never replaced. *The download stopped*: run the command again, it resumes. *Does not match the checksum*: the download was damaged and is deleted; run the command again. *The downloaded UTM is not signed by UTM's developer or not notarized*: it was not installed; get UTM from [mac.getutm.app](https://mac.getutm.app).
+
 **UTM does not open the `.utm`, or reports an unsupported configuration.** Update UTM to 4.7 or newer. The `.utm` comes inside a zip: double-click the zip first, then the `.utm`.
 
-**The VM stops at a black screen with a blinking cursor, or at the UEFI shell.** The VM found nothing to boot. Check that its disk is listed first in the VM's settings (for a VM of your own, the imported `.img`, decompressed). In the UEFI shell, `fs0:\efi\boot\bootaa64.efi` starts the boot loader by hand.
+**The VM stops at a black screen with a blinking cursor, or at the UEFI shell.** The VM found nothing to boot. Check that its disk is listed first in the VM's settings (for a VM of your own, the imported `.img`, decompressed; for one made from the ISO, that the ISO is attached until the installation is done). In the UEFI shell, `fs0:\efi\boot\bootaa64.efi` starts the boot loader by hand.
 
-**The screen stays black, or the display is garbled.** Switch the VM's display to `virtio-gpu-pci` in UTM's settings to rule out the GPU display.
+**The screen stays black, or the display is garbled.** Switch the VM's display to `virtio-gpu-pci` in UTM's settings to rule out the GPU display. From the ISO, *compatibility mode* in its boot menu does the same for the live session.
+
+**`sudo apt update` in the ISO's live session reports an error for the CD.** The ISO's package pool has no signed index, exactly as on Linux Mint's own ISO; the error concerns only the CD and changes nothing else. The installed system does not use the CD.
 
 **The first start takes a while.** Before Linux Mint's setup appears, the first start removes what the machine does not use: a minute or two in a VM, a few minutes on a Pi with a slow card, while the start-up logo stays on screen. `journalctl -u mint-arm-first-start -u mint-arm-first-start-late` shows afterwards what it removed and kept.
 
@@ -20,6 +24,8 @@
 
 **apt wants to replace a Linux Mint package with Ubuntu's.** The local archive's priority is missing or was changed. `apt policy base-files` should show `700 file:/usr/share/mint-arm/repo` for Linux Mint's version. If it does not, reinstall the archive package: `sudo apt install --reinstall mint-arm-repo`.
 
+**`dpkg --verify` lists files under `/usr/lib/firmware/…-generic/device-tree/` as missing.** They are the device trees of physical ARM boards that Ubuntu's generic kernel brings, which this system leaves out (`/etc/dpkg/dpkg.cfg.d/mint-arm-board-device-trees`): dpkg reports every file that a `path-exclude` setting leaves out as missing. Nothing else is wrong. To have them anyway, delete that file, then run `sudo apt install --reinstall linux-modules-$(uname -r)`.
+
 **Software Sources: the mirror list has no fast mirror near you.** The list holds thirteen of Ubuntu's ARM mirrors in ten countries. Any other `ubuntu-ports` mirror works too: edit `/etc/apt/sources.list.d/official-package-repositories.list` and replace `ports.ubuntu.com/ubuntu-ports` on the four Ubuntu lines.
 
 **An application is not in the Software Manager, or installing it fails.** It has no ARM64 build. Thunderbird and Chromium have other sources ([Installing software](manual.md#7-installing-software)); for others, look for an `aarch64` Flatpak or an ARM64 download from the maker.
@@ -33,6 +39,8 @@
 **No sound.** Check the output device in Cinnamon's *Sound* settings, and that the VM's settings have a sound card (*Intel HD Audio*). UTM's sound backend is set in UTM › Settings › *Sound*.
 
 **The first-start setup was interrupted.** Forcing the VM off during the setup is harmless: it runs again at the next start, until it has finished. To start over completely, remove the VM from UTM and unzip the download again. The same goes for a Raspberry Pi: to start over, write the image to the card again.
+
+**Raspberry Pi Imager does not list Linux Mint ARM.** The custom list needs Imager 2.0 or newer (*App Options* › *Content Repository*). Check the address for typos, and the Mac's or PC's connection to `raw.githubusercontent.com`; with *No filtering* chosen as the device, every system shows. Downloading the `.img.xz` and choosing *Use custom* always works.
 
 **Raspberry Pi: the screen stays black.** If the Pi's green activity light never flickers, it does not read the card: write the image again (Raspberry Pi Imager verifies what it wrote), or try another card. If the light flashes a repeating pattern, the bootloader is reporting an error, which [Raspberry Pi's documentation](https://www.raspberrypi.com/documentation/computers/configuration.html#led-warning-flash-codes) decodes. If the light flickers but the screen stays dark, connect the screen to the first HDMI port (HDMI0; on a Pi 4, the one next to the power socket) before switching on, and check that the screen is set to that input.
 

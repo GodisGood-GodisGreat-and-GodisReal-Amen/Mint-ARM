@@ -1,6 +1,11 @@
 Linux Mint ARM (unofficial arm64 build of Linux Mint 22.3 "Zena" Cinnamon): virtual machines
 
 What only virtual machines use (the system's first start removes this package on a Raspberry
-Pi). Firefox renders in software (/usr/lib/firefox/defaults/pref/mint-arm-vm.js), and
-the mint-arm-rosetta service registers Apple's Rosetta for x86-64 Linux programs when the VM
-runs under Apple's Virtualization framework with Rosetta sharing enabled.
+Pi). Firefox renders in software (/usr/lib/firefox/defaults/pref/mint-arm-vm.js), and the
+mint-arm-rosetta service registers Apple's Rosetta for x86-64 Linux programs when the VM runs
+under Apple's Virtualization framework with Rosetta sharing enabled. A drop-in for
+qemu-guest-agent.service (qemu-guest-agent.service.d/mint-arm.conf) keeps the QEMU guest agent
+running when Linux Mint's setup wizard switches to the desktop. /etc/default/grub.d/mint-arm-vm.cfg
+makes the VM's screen the kernel's console (console=tty1) instead of the serial port that the
+firmware of QEMU's and UTM's virtual machines names, so that the start-up splash shows and an
+encrypted system asks for its passphrase on the screen.

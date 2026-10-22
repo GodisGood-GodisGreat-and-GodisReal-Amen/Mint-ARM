@@ -1,0 +1,8 @@
+#!/bin/sh
+# An update of mint-arm-vm on a running virtual machine: GRUB's menu takes its settings at once.
+# A new system gets them when its menu is first made (the image's build, the installer).
+set -e
+if [ "$1" = configure ] && [ -n "${2:-}" ] && [ -e /boot/grub/grub.cfg ] \
+   && command -v update-grub > /dev/null && ! ischroot 2> /dev/null; then
+  update-grub || true
+fi

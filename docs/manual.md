@@ -28,6 +28,8 @@ Linux Mint ARM is one disk image, already installed, that starts in two ways:
 
 Until its first start the image carries both machines' kernels, boot files and tools. The first start keeps what its machine uses and removes the rest, so a Pi carries nothing of the VM's and a VM nothing of the Pi's. The ready-made UTM VM is the same image with that already done.
 
+For those who would rather install it themselves there is also the live/install ISO, for virtual machines: Linux Mint's own installer puts the virtual machines' half on the disk you choose, partitioned and encrypted as you like ([Getting started](getting-started.md#5-installing-from-the-iso)). A system installed so has no first start to run.
+
 ## 2. The first start
 
 ![The first start](images/first-start.png)
@@ -149,7 +151,7 @@ The system swaps to **compressed RAM** first (`zram`, sized at half the VM's mem
 
 ## 10. Disk space
 
-The ready-made VM's disk holds up to 64 GB and takes only the space actually written: under 2 GB on the Mac at first, as it comes compressed. The system uses about 4.7 GB of it, plus the 2 GB swap file. A VM made from the image grows to fill its disk at its first start, so give the disk its size before that start.
+The ready-made VM's disk holds up to 64 GB and takes only the space actually written: under 2 GB on the Mac at first, as it comes compressed. The system uses about 4.3 GB of it, plus the 2 GB swap file. A VM made from the image grows to fill its disk at its first start, so give the disk its size before that start.
 
 To make the disk bigger later: shut the VM down, open its settings › the drive › **Resize**, start it again, then grow the system's partition and file system into the new space:
 
@@ -181,7 +183,7 @@ The ready-made VM is configured as follows. Every setting can be changed in UTM 
 
 To keep the system light, these parts of Linux Mint's ISO are not installed, on any machine unless marked. The applications are each one click away in the Software Manager:
 
-- **The live session and the installer**: the image comes installed, so there is nothing to install from.
+- **The live session and the installer**: the image comes installed; they are on the ISO, for installing it yourself.
 - **Applications**: LibreOffice, Thunderbird (see [above](#7-installing-software)), Rhythmbox, Hypnotix, Transmission, Warpinator, Pix, Drawing, Onboard.
 - **Developer packages**: debug symbols, the C and C++ compilers (`build-essential`) and kernel headers, only needed to build drivers, which a VM does not use.
 - **Translations**: seven language packs that Linux Mint's ISO preinstalls (German, Spanish, French, Italian, Dutch, Portuguese and Russian). The installer and the first-start setup download the one you choose.
@@ -201,6 +203,7 @@ Four packages carry everything this build changes (`apt show mint-arm-system min
 | `/etc/firefox/policies/policies.json` | Linux Mint's Firefox defaults |
 | `/usr/lib/systemd/zram-generator.conf.d/50-mint-arm.conf`, `/usr/lib/sysctl.d/90-mint-arm.conf` | compressed RAM swap and its memory settings |
 | `/usr/lib/systemd/journald.conf.d/50-mint-arm.conf` | the system journal keeps at most 200 MB |
+| `/etc/dpkg/dpkg.cfg.d/mint-arm-board-device-trees` | Ubuntu's generic kernel installs without the device trees of physical ARM boards, which virtual machines never use; the Raspberry Pi kernel keeps its own. `dpkg --verify` lists the left-out files as missing ([troubleshooting](troubleshooting.md)) |
 | `/usr/share/glib-2.0/schemas/90_mint-arm.gschema.override` | Update Manager does not suggest switching to a Linux Mint mirror |
 | `/usr/lib/mint-arm/first-start`, `mint-arm-first-start.service`, `mint-arm-first-start-late.service`, `/usr/share/mint-arm/remove-on-vm`, `remove-on-pi` | the first start's removal of what the machine does not use ([section 2](#2-the-first-start)) |
 | `casper-md5check.service.d/mint-arm-live-only.conf` | on a system made from release 1.0.0, which keeps Linux Mint's live-session package, the check of the installation medium runs in live sessions only |
@@ -211,6 +214,8 @@ Four packages carry everything this build changes (`apt show mint-arm-system min
 | --- | --- |
 | `/usr/lib/firefox/defaults/pref/mint-arm-vm.js` | Firefox renders in software ([display](#3-the-display)) |
 | `/usr/lib/mint-arm/rosetta-setup`, `mint-arm-rosetta.service` | Rosetta, under Apple's Virtualization framework |
+| `qemu-guest-agent.service.d/mint-arm.conf` | the QEMU guest agent keeps running when Linux Mint's setup wizard hands over to the desktop |
+| `/etc/default/grub.d/mint-arm-vm.cfg` | the kernel's console is the VM's screen (`console=tty1`), as on a PC: the start-up splash shows, and an encrypted system asks for its passphrase there. Without it, the firmware of QEMU's and UTM's virtual machines names their serial port as the console |
 
 `mint-arm-pi` keeps the Raspberry Pi's boot chain installed (the kernel, `flash-kernel`, the Pi's firmware and Ubuntu's Raspberry Pi desktop settings) and adds `/usr/lib/netplan/00-mint-arm-network-manager.yaml`, which lets NetworkManager manage wired connections as on Linux Mint, and `/usr/lib/NetworkManager/conf.d/zz-mint-arm-wifi-powersave-off.conf`, which turns Wi-Fi power saving off ([section 14](#14-raspberry-pi)).
 

@@ -76,12 +76,13 @@ leave_image() {   # unmount everything, punching the freed blocks out of the ima
   sudo fstrim "$MNT"
   detach
 }
-compress() {   # IMAGE OUTPUT.img.xz
-  xz -T0 -9 -c "$1" > "$2.part"
-  mv "$2.part" "$2"
-  (cd "$(dirname "$2")" && sha256sum "$(basename "$2")" > "$(basename "$2").sha256")
-  [ "$(stat -c %s "$2")" -le "$SIZE_LIMIT" ] \
-    || { echo "$(basename "$2") is over GitHub's 2 GiB limit for a release file" >&2; exit 1; }
+compress() {   # IMAGE OUTPUT.img.xz [XZ_OPTION...] (every core: xz would use half of them under its default memory cap)
+  local image=$1 out=$2; shift 2
+  xz -T0 -9 "$@" --memlimit-compress=75% -c "$image" > "$out.part"
+  mv "$out.part" "$out"
+  (cd "$(dirname "$out")" && sha256sum "$(basename "$out")" > "$(basename "$out").sha256")
+  [ "$(stat -c %s "$out")" -le "$SIZE_LIMIT" ] \
+    || { echo "$(basename "$out") is over GitHub's 2 GiB limit for a release file" >&2; exit 1; }
 }
 kernel() {   # FLAVOUR: the newest installed kernel of that flavour (raspi, generic)
   in_image linux-version list | grep -- "-$1\$" | sort -V | tail -1
@@ -110,11 +111,14 @@ EOF
   LOOP=$(sudo losetup -P --show -f "$IMG")
   # (a lowercase label, as on Ubuntu's images; mkfs.fat warns about those)
   sudo mkfs.vfat -F 32 -n system-boot "${LOOP}p1" 2>&1 | { grep -v -e 'lowercase labels' -e '^mkfs.fat ' || true; }
-  sudo mkfs.ext4 -q -L writable "${LOOP}p2"
+  # The system goes in as the file system is made: one sequential pass in directory order, so files
+  # that are alike lie together. That compresses better, and the same in every build, than copying
+  # into the mounted file system, where where each file lands depends on timing.
+  log "writing the system ($used MiB) into a $total_mib MiB image"
+  sudo mkfs.ext4 -q -L writable -d "$R" "${LOOP}p2"
   sudo losetup -d "$LOOP" && LOOP=
   attach "$IMG"
-  log "copying the system ($used MiB) into a $total_mib MiB image"
-  sudo rsync -aHAXx --numeric-ids --exclude=/mnt/mintarm-repo --exclude=/boot/firmware/ "$R/" "$MNT/"
+  sudo rmdir "$MNT/mnt/mintarm-repo" 2> /dev/null || true
   # The initrds again, now that the partitions exist: in the system's own folder, initramfs-tools
   # cannot find LABEL=writable, so it leaves out the file system check of the system partition.
   in_image update-initramfs -u -k all > "$W/logs/image-initramfs.log" 2>&1 \
@@ -280,7 +284,9 @@ EOF
 make_image
 leave_image
 log "compressing $NAME.img.xz"
-compress "$IMG" "$OUT/$NAME.img.xz"
+# A 384 MiB window (64 MiB at -9) reaches the files that are alike but far apart in the image:
+# about 60 MB less to download, for some ten minutes more here and 385 MB of memory to unpack it.
+compress "$IMG" "$OUT/$NAME.img.xz" --lzma2=preset=9,dict=384MiB
 log "image: $(du -h "$OUT/$NAME.img.xz" | cut -f1) compressed, $(du -h --apparent-size "$IMG" | cut -f1) written to a card"
 make_vm_disk
 if [ -n "${TEST_SSH_KEY:-}" ]; then make_test_image "$TEST_SSH_KEY"; fi

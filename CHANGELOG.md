@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 — 2026-10-22
+
+- **Installed with one command on a Mac.** One line in Terminal ([`install.sh`](install.sh)) checks the Mac, installs UTM if it is missing (after asking; from UTM's developer, and only if Apple's notarization check passes), downloads the latest release's virtual machine, checks it against the release's checksums, puts it in the *Virtual Machines* folder of your home folder and opens it in UTM.
+- **In Raspberry Pi Imager's list.** A content repository for Imager 2.0 and newer ([`imager/os_list.json`](imager/os_list.json)): Linux Mint ARM appears among the systems for the Pi 4 and Pi 5 families, and Imager downloads it, checks it and writes it.
+- **The live/install ISO is back**, for those who would rather install it themselves: a live session with Linux Mint's own installer for virtual machines (choose the disk, the partitions, encryption), carrying the virtual machines' half only.
+- **Lighter, with nothing removed**: identical files are stored once (117 MB less in a VM), and the parts of files that hold nothing but zeros, mostly padding inside programs and libraries, are not written to disk (164 MB less); an update writes the files it replaces in full. Ubuntu's generic kernel installs without the device trees of physical boards, which no virtual machine uses (100 MB less). In a VM, 4.25 GB of files instead of 4.67 GB, with the same packages and otherwise the same files; the image and the virtual machine are smaller downloads (1.41 GB and 1.75 GB instead of 1.46 and 1.82).
+- **A quicker first start**: one apt run removes what the machine does not use, the initrd is built once instead of twice, and man-db's index waits for its daily update: in a VM it takes 13 s instead of 18, and Linux Mint's setup appears 16 s after power-on instead of 23.
+- **The QEMU guest agent keeps running** when Linux Mint's setup wizard hands over to the desktop; it used to stop until the next start.
+- **A VM's screen is its console**, as on a PC: Linux Mint's start-up splash shows, and a system installed from the ISO with encryption asks for its passphrase on the screen. The firmware of QEMU's and UTM's virtual machines used to send both to the VM's serial port, which UTM does not show. A VM updated from 1.1.0 gets this with the update.
+- **Still not tested on a real Raspberry Pi**: as for 1.1.0, the Pi was tested with its own kernel in QEMU on a Mac.
+
 ## 1.1.0 — 2026-10-22
 
 - **One image for virtual machines and the Raspberry Pi.** `linuxmint-22.3-cinnamon-arm64-unofficial.img.xz` starts in a virtual machine (UEFI, GRUB, the hardware-enablement kernel) and on a Raspberry Pi 4, 400, CM4, 5, 500 or CM5 (the Pi's firmware, Ubuntu's Raspberry Pi kernel with the Pi's firmware only), from the same boot partition. At its first start it removes what its machine does not use: in a VM the Raspberry Pi's kernel, firmware and boot tools, and Bluetooth, Wi-Fi, printing and scanning; on a Pi the VM's kernel, GRUB and guest tools. It then runs Linux Mint's setup. The ready-made UTM VM is that image on a 64 GB disk, with its first start in a VM already done.

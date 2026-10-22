@@ -4,18 +4,18 @@
 # usage: ./build.sh [--test-ssh] [--keep-vm] [WORK_DIR]
 #
 # Stage 00 starts an Ubuntu 24.04 arm64 build VM (QEMU with Apple's Hypervisor framework).
-# Stages 10 to 30 run inside it: they rebuild Linux Mint's packages for arm64, assemble the system
-# and make the disk image that starts on a Raspberry Pi and in virtual machines. Stage 40 wraps
-# that image, prepared for a VM, as a ready-to-run UTM virtual machine. The image, the VM and the
-# mint-arm-repo package (Mint's packages for arm64, for updating systems made from an earlier
-# release) land in out/.
+# Stages 10 to 35 run inside it: they rebuild Linux Mint's packages for arm64, assemble the system,
+# make the disk image that starts on a Raspberry Pi and in virtual machines, and the live/install
+# ISO for virtual machines. Stage 40 wraps the image, prepared for a VM, as a ready-to-run UTM
+# virtual machine. The image, the VM, the ISO and the mint-arm-repo package (Mint's packages for
+# arm64, for updating systems made from an earlier release) land in out/.
 #
 # --test-ssh also makes a test image that root can log in to over SSH with a key made here, in
 # work/pi-test/: for testing on a real Raspberry Pi, never for a release.
 # WORK_DIR (default: work/) keeps the build VM's disk, so running the command again after a
 # failure resumes instead of starting over; delete it to start clean. --keep-vm leaves the build
-# VM running at the end, for a look inside. About 40 minutes on an M4 Max; the build
-# needs ~60 GB of disk. See docs/building.md.
+# VM running at the end, for a look inside. About 45 minutes on an M4 Max; the build
+# needs ~70 GB of disk. See docs/building.md.
 emulate -L zsh
 setopt err_exit pipe_fail no_unset
 
@@ -34,8 +34,8 @@ OUT=${OUT:-$HERE/out}
 VM=$WORK/build-vm
 PORT=${BUILD_SSH_PORT:-2299}
 NAME=linuxmint-22.3-cinnamon-arm64-unofficial
-STAGES=(10-packages 15-mintarm 20-rootfs 30-image)
-NEED_GB=60
+STAGES=(10-packages 15-mintarm 20-rootfs 30-image 35-iso)
+NEED_GB=70
 
 log() { print -r -- "[$(date +%H:%M:%S)] $*" }
 took() { (( SECONDS - $1 < 90 )) && print -r -- "$(( SECONDS - $1 )) s" || print -r -- "$(( (SECONDS - $1 + 30) / 60 )) min" }
@@ -112,7 +112,7 @@ COPYFILE_DISABLE=1 bsdtar --no-mac-metadata --format ustar -C $HERE -cf - build 
 # The stages see the Mac's time zone (for their log times) and any of these settings set here.
 tz=$(readlink /etc/localtime 2> /dev/null) tz=${tz#*zoneinfo/}
 settings="TZ=${tz:-UTC}"
-for name in JOBS PAR MINT_MIRROR UBUNTU_MIRROR; do
+for name in JOBS PAR MINT_MIRROR UBUNTU_MIRROR SQUASHFS_COMP; do
   [[ -n ${(P)name:-} ]] && settings+=" $name=${(qq)${(P)name}}"
 done
 for stage in $STAGES; do
@@ -133,12 +133,13 @@ copy_out() {
   mv $dir/$name.part $dir/$name
   (cd $dir && shasum -a 256 -c $name.sha256 > /dev/null) || die "the copied $name does not match its checksum"
 }
-log "copying $NAME.img.xz and the virtual machine's disk to $OUT"
+log "copying $NAME.img.xz, the virtual machine's disk and the ISO to $OUT"
 # an earlier build's results, including files this build no longer makes
 rm -f $OUT/linuxmint-22.3-cinnamon-arm64-*(N) $OUT/mint-arm-repo_*.deb(N)
 copy_out /srv/mintarm/out/$NAME.img.xz $OUT
 copy_out /srv/mintarm/out/$NAME-vm.qcow2 $OUT
-outputs=($OUT/$NAME.img.xz "$OUT/Linux Mint 22.3 ARM.utm")
+copy_out /srv/mintarm/out/$NAME.iso $OUT
+outputs=($OUT/$NAME.img.xz "$OUT/Linux Mint 22.3 ARM.utm" $OUT/$NAME.iso)
 if (( TEST_SSH )); then
   log "copying the SSH test image to $WORK/pi-test"
   rm -f $WORK/pi-test/linuxmint-22.3-cinnamon-arm64-*(N)

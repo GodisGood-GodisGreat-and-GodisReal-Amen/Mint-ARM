@@ -1,0 +1,60 @@
+{
+  "imager": {
+    "latest_version": "2.0.12",
+    "url": "https://www.raspberrypi.com/software/",
+    "devices": [
+      {
+        "name": "Raspberry Pi 5",
+        "tags": [
+          "pi5-64bit",
+          "pi5-32bit"
+        ],
+        "icon": "https://downloads.raspberrypi.com/imager/icons/RPi_5.png",
+        "description": "Raspberry Pi 5, 500 / 500+, and Compute Module 5",
+        "matching_type": "exclusive",
+        "capabilities": []
+      },
+      {
+        "name": "Raspberry Pi 4",
+        "tags": [
+          "pi4-64bit",
+          "pi4-32bit"
+        ],
+        "default": false,
+        "icon": "https://downloads.raspberrypi.com/imager/icons/RPi_4.png",
+        "description": "Raspberry Pi 4 Model B, 400, and Compute Module 4 / 4S",
+        "matching_type": "inclusive",
+        "capabilities": []
+      },
+      {
+        "name": "No filtering",
+        "tags": [],
+        "default": false,
+        "description": "Show every possible image",
+        "matching_type": "inclusive",
+        "capabilities": []
+      }
+    ]
+  },
+  "os_list": [
+    {
+      "name": "Linux Mint ARM 22.3 Cinnamon (unofficial)",
+      "description": "Linux Mint 22.3 \"Zena\" with Cinnamon, rebuilt for ARM64. Linux Mint's own setup asks for your language, keyboard, time zone and account at the first start. Not made by the Linux Mint team.",
+      "icon": "https://raw.githubusercontent.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM/main/imager/icon.png",
+      "website": "https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM",
+      "url": "https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM/releases/download/v1.2.0/linuxmint-22.3-cinnamon-arm64-unofficial.img.xz",
+      "extract_size": 6800015360,
+      "extract_sha256": "e6f75b4077ceaa4bc4d8a1684788268e33d9190dbf613e886ec6344cd29dd1c7",
+      "image_download_size": 1414363136,
+      "image_download_sha256": "10d4176f62d888cb9a54539d454c007c805683b2385a1bc09b7084201c8fc005",
+      "release_date": "2026-10-22",
+      "init_format": "none",
+      "architecture": "armv8",
+      "devices": [
+        "pi5-64bit",
+        "pi4-64bit"
+      ],
+      "capabilities": []
+    }
+  ]
+}

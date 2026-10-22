@@ -35,15 +35,16 @@ It prints one line per step, and each stage's progress:
 ...
 ```
 
-About 40 minutes later on an M4 Max (with 8 of its cores), the results are in `out/`:
+About 45 minutes later on an M4 Max (with 8 of its cores), the results are in `out/`:
 
 | File | What it is |
 | --- | --- |
 | `linuxmint-22.3-cinnamon-arm64-unofficial.img.xz` and its `.sha256` | the image: a Raspberry Pi's card, or a virtual machine's disk, prepared for its first-start setup |
 | `Linux Mint 22.3 ARM.utm` | the ready-made UTM virtual machine: the image on a 64 GB disk, its first start in a VM already done |
+| `linuxmint-22.3-cinnamon-arm64-unofficial.iso` and its `.sha256` | the live/install ISO for virtual machines, with Linux Mint's installer |
 | `mint-arm-repo_<version>_all.deb` | the local archive of Linux Mint's packages, for updating systems made from an earlier release |
 
-`work/` keeps the build VM's disk, about 40 GB. Running `./build.sh` again resumes: stage 10 only builds the packages still missing, and the later stages always start fresh, so a second run after a change takes about 13 minutes. Delete `work/` to free the space, or to start from nothing.
+`work/` keeps the build VM's disk, about 40 GB. Running `./build.sh` again resumes: stage 10 only builds the packages still missing, and the later stages always start fresh, so a second run after a change takes about 25 minutes. Delete `work/` to free the space, or to start from nothing.
 
 **Options.** `--test-ssh` also makes a test image that can be reached over SSH, for testing on a real Raspberry Pi ([section 7](#7-testing)); it is never for a release. `--keep-vm` leaves the build VM running at the end, for a look inside (`ssh -i work/build-vm/id_build -p 2299 builder@127.0.0.1`). A folder given as argument replaces `work/`, for example on another disk: `./build.sh /Volumes/Fast/mint-arm-work`. The settings in [section 8](#8-settings) adjust the rest.
 
@@ -54,10 +55,11 @@ About 40 minutes later on an M4 Max (with 8 of its cores), the results are in `o
 | Stage | Runs on | What it does | Time on an M4 Max |
 | --- | --- | --- | --- |
 | `00-build-vm.sh` | Mac | downloads Ubuntu 24.04's ARM64 cloud image (checking its SHA-256), starts it with QEMU on Apple's hypervisor, SSH on port 2299 | 15 s, plus the 600 MB download |
-| `10-packages.sh` | build VM | rebuilds Linux Mint's 48 source packages with compiled code for ARM64, in four dependency layers; fetches Mint's 163 architecture-independent packages | 24 min |
+| `10-packages.sh` | build VM | rebuilds Linux Mint's 48 source packages with compiled code for ARM64, in four dependency layers; fetches Mint's 163 architecture-independent packages | 22 min |
 | `15-mintarm.sh` | build VM | patches Software Sources (Ubuntu's ARM mirrors) and Update Manager (the kernel line); makes the settings packages (`mint-arm-system`, `mint-arm-vm`, `mint-arm-pi`) and the `firefox-locale-*` transition packages | 15 s |
-| `20-rootfs.sh` | build VM | the system, with both machines' halves: debootstrap, Linux Mint's package selection, the local archive, the first-start setup | 6 min |
-| `30-image.sh` | build VM | the image: partitions, the system, the Raspberry Pi's boot files put on the boot partition by `flash-kernel` and GRUB installed beside them, checks, xz compression; the UTM VM's disk; with `--test-ssh`, the SSH test image | 6 min (11 with `--test-ssh`) |
+| `20-rootfs.sh` | build VM | the system, with both machines' halves: debootstrap, Linux Mint's package selection, the local archive, the first-start setup; a copy for virtual machines with the live session and the installer, for the ISO; identical files stored once | 6 min |
+| `30-image.sh` | build VM | the image: partitions, the system, the Raspberry Pi's boot files put on the boot partition by `flash-kernel` and GRUB installed beside them, checks, xz compression; the UTM VM's disk; with `--test-ssh`, the SSH test image | 15 min (19 with `--test-ssh`) |
+| `35-iso.sh` | build VM | the live/install ISO: the live system as a squashfs, the installer's offline pool, the boot menu, shim and GRUB | 30 s |
 | `40-vm-image.sh` | Mac | wraps the VM's disk as a UTM virtual machine | 5 s |
 
 ## 4. Running the stages by hand
@@ -146,6 +148,21 @@ tools/x86-hello.py work/hello && tools/qga.py 4460 put work/hello /tmp/hello
 tools/qga.py 4460 run 'chmod +x /tmp/hello && /tmp/hello'      # "hello from x86-64, translated by Rosetta"
 ```
 
+The ISO, in a test VM with an empty disk: its boot menu, the live session, then Linux Mint's installer:
+
+```bash
+qemu-img create -f qcow2 work/install.qcow2 64G
+QGA_PORT=4460 tools/testvm.sh iso work/install.qcow2 out/linuxmint-22.3-cinnamon-arm64-unofficial.iso &
+tools/qmp.py 4450 shot live.png
+```
+
+The one-command install, against the release files in `out/release/` (from `make-release.sh`) instead of GitHub, into a test folder and without opening UTM:
+
+```bash
+MINT_ARM_RELEASE=$(python3 -c 'import pathlib; print(pathlib.Path("out/release").resolve().as_uri())') \
+  ./install.sh --dir work/vm --no-open
+```
+
 **On a real Raspberry Pi**, the Pi's own hardware gets tested: its firmware and `config.txt`, the GPU, Wi-Fi, Bluetooth, sound and the bootloader. `./build.sh --test-ssh` makes, next to the release image, a test image in `work/pi-test/`. It is the release image plus an SSH server: root logs in with a key made in `work/pi-test/` only (no passwords), and only from private network addresses; Avahi announces it on the network, from the setup wizard on; the Pi's bootloader is left as it is. Write it to a card with Raspberry Pi Imager, start the Pi on the same network as the Mac, then:
 
 ```bash
@@ -171,6 +188,7 @@ The test image never goes to `out/`, and `make-release.sh` refuses an image with
 | `PAR` | `3` | how many packages stage 10 builds at once |
 | `MINT_MIRROR` | `http://packages.linuxmint.com` | where Linux Mint's packages and sources come from |
 | `UBUNTU_MIRROR` | `http://ports.ubuntu.com/ubuntu-ports` | Ubuntu's ARM archive (any `ubuntu-ports` mirror) |
+| `SQUASHFS_COMP` | `zstd` | the ISO's squashfs compression (`xz` for a smaller, slower ISO) |
 
 Example: `BUILD_CPUS=8 UBUNTU_MIRROR=http://de.ports.ubuntu.com/ubuntu-ports ./build.sh`.
 
@@ -181,6 +199,6 @@ Example: `BUILD_CPUS=8 UBUNTU_MIRROR=http://de.ports.ubuntu.com/ubuntu-ports ./b
 tools/make-release.sh
 ```
 
-`make-release.sh` puts the release files in `out/release/`: the image, the virtual machine as a zip, the `mint-arm-repo` package, `SHA256SUMS`, and the source code that a release must carry. It starts the image headlessly in QEMU, on a throwaway overlay and with its first start held back (both halves still installed), lists the source package behind every binary package (`source-packages.tsv`, with where each source is published), and downloads Linux Mint's sources for every package compiled or patched for ARM64 into `linuxmint-22.3-arm64-sources.tar`, with apt checking them against Linux Mint's signed index. It refuses an image that has SSH access (a test image), and documents that still hold a `TODO-` placeholder for a measurement or the release date.
+`make-release.sh` puts the release files in `out/release/`: the image, the virtual machine as a zip, the ISO, the `mint-arm-repo` package, `SHA256SUMS`, and the source code that a release must carry. It also writes `imager/os_list.json` in the repository, Raspberry Pi Imager's entry for the new image (its download address, sizes and SHA-256s), with Raspberry Pi's current device list: commit it with the release, as Imager reads it from the repository. It starts the image headlessly in QEMU, on a throwaway overlay and with its first start held back (both halves still installed), lists the source package behind every binary package (`source-packages.tsv`, with where each source is published), and downloads Linux Mint's sources for every package compiled or patched for ARM64 into `linuxmint-22.3-arm64-sources.tar`, with apt checking them against Linux Mint's signed index. It refuses an image that has SSH access (a test image), and documents that still hold a `TODO-` placeholder for a measurement or the release date.
 
-Before publishing: raise the version in `CHANGELOG.md` and, if they changed, in the settings packages' `DEBIAN/control`; test the image as a VM and as a Pi, and the ready-made VM (section 7); then create the release on GitHub with the files from `out/release/`. Each file must stay under GitHub's 2 GB limit; both scripts check it.
+Before publishing: raise the version in `CHANGELOG.md` and, if they changed, in the settings packages' `DEBIAN/control`; test the image as a VM and as a Pi, the ready-made VM and the ISO (section 7); then create the release on GitHub with the files from `out/release/`, and push `imager/os_list.json` once the release exists. Each file must stay under GitHub's 2 GB limit; both scripts check it.

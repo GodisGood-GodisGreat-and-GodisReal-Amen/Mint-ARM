@@ -2,6 +2,7 @@
 # Turn a finished build (out/) into release files, in out/release/:
 #   linuxmint-22.3-cinnamon-arm64-unofficial.img.xz    the image: a Raspberry Pi's card or a VM's disk
 #   linuxmint-22.3-cinnamon-arm64-unofficial-utm.zip   the ready-made UTM virtual machine
+#   linuxmint-22.3-cinnamon-arm64-unofficial.iso       the live/install ISO for virtual machines
 #   mint-arm-repo_VERSION_all.deb                      Mint's packages for arm64, to update a
 #                                                      system made from an earlier release
 #   linuxmint-22.3-arm64-sources.tar                   Linux Mint's source packages for everything
@@ -9,6 +10,8 @@
 #   source-packages.tsv                                every source package in the image, its
 #                                                      version, and where its source lives
 #   SHA256SUMS
+# and, in the repository, imager/os_list.json: Raspberry Pi Imager's entry for this release's image
+# (its URL, sizes and SHA-256s), to commit along with the release.
 # The source list comes from the image itself: it starts headlessly in QEMU as testpi.sh starts it,
 # on a throwaway overlay, with its first start held back so that both its halves are still there;
 # it lists what is installed and downloads Mint's sources with apt, which checks them against
@@ -28,11 +31,13 @@ VERSION=$(awk '/^## / {print $2; exit}' $ROOT/CHANGELOG.md)
 REPO_URL=https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM
 BUNDLE="Linux Mint 22.3 ARM.utm"
 IMAGE=linuxmint-22.3-cinnamon-arm64-unofficial.img.xz
+ISO=linuxmint-22.3-cinnamon-arm64-unofficial.iso
 SOURCES=linuxmint-22.3-arm64-sources
+RELEASE_DATE=$(awk '/^## / {print $4; exit}' $ROOT/CHANGELOG.md)
 
 log() { print -r -- "[$(date +%H:%M:%S)] $*" }
 disk=($OUT/$BUNDLE/Data/*.qcow2(N))
-[[ -f $OUT/$IMAGE && $#disk -gt 0 ]] || { print -u2 "no image or VM in $OUT: run ./build.sh first"; exit 1 }
+[[ -f $OUT/$IMAGE && -f $OUT/$ISO && $#disk -gt 0 ]] || { print -u2 "no image, ISO or VM in $OUT: run ./build.sh first"; exit 1 }
 # the documents a release points to carry no placeholder for a measurement or a date
 if grep -rqE 'TODO-[A-Z]' $ROOT/README.md $ROOT/CHANGELOG.md $ROOT/CONTRIBUTING.md $ROOT/docs; then
   print -u2 "placeholders are left in the documents:"
@@ -111,14 +116,52 @@ bsdtar --no-mac-metadata --format ustar --uid 0 --gid 0 --uname root --gname roo
   -cf $REL/$SOURCES.tar -C $REL/.stage $SOURCES
 
 log "packing the UTM virtual machine"
-ln -f $OUT/$IMAGE $REL/
+ln -f $OUT/$IMAGE $OUT/$ISO $REL/
 repo_deb=($OUT/mint-arm-repo_*_all.deb(Nom[1]))
 (( $#repo_deb )) && ln -f $repo_deb[1] $REL/
 (cd $OUT && zip -q -r -X -1 $REL/${IMAGE%.img.xz}-utm.zip $BUNDLE -x '*.DS_Store')
 rm -rf $REL/.stage
-(cd $REL && shasum -a 256 *.img.xz *.zip *.deb(N) *.tar *.tsv > SHA256SUMS)
-for f in $REL/*.img.xz $REL/*.zip; do
+(cd $REL && shasum -a 256 *.img.xz *.zip *.iso *.deb(N) *.tar *.tsv > SHA256SUMS)
+for f in $REL/*.img.xz $REL/*.zip $REL/*.iso; do
   (( $(stat -f %z $f) <= 2147483648 )) || { print -u2 "${f:t} is over GitHub's 2 GiB limit for a release file"; exit 1 }
 done
+log "Raspberry Pi Imager's entry: imager/os_list.json"
+python3 - $REL/$IMAGE $ROOT/imager/os_list.json $REPO_URL $VERSION $RELEASE_DATE \
+  "$(xz --robot --list $REL/$IMAGE | awk '$1 == "totals" {print $5}')" \
+  "$(xz -dc $REL/$IMAGE | shasum -a 256 | cut -d' ' -f1)" "$(shasum -a 256 $REL/$IMAGE | cut -d' ' -f1)" <<'EOF'
+import json, os, sys, urllib.request
+image, out, repo_url, version, date, extract_size, extract_sha256, download_sha256 = sys.argv[1:9]
+owner_repo = repo_url.split('github.com/')[1]
+# Imager's own version and device list, as Raspberry Pi publishes them (or as last written here)
+try:
+    with urllib.request.urlopen('https://downloads.raspberrypi.com/os_list_imagingutility_v4.json', timeout=30) as r:
+        official = json.load(r)['imager']
+except Exception:
+    official = json.load(open(out))['imager']
+keep = ('Raspberry Pi 5', 'Raspberry Pi 4', 'No filtering')
+imager = {k: official[k] for k in ('latest_version', 'url') if k in official}
+imager['devices'] = [d for d in official['devices'] if d['name'] in keep]
+entry = {
+    'name': 'Linux Mint ARM 22.3 Cinnamon (unofficial)',
+    'description': 'Linux Mint 22.3 "Zena" with Cinnamon, rebuilt for ARM64. Linux Mint\'s own setup asks for your '
+                   'language, keyboard, time zone and account at the first start. Not made by the Linux Mint team.',
+    'icon': f'https://raw.githubusercontent.com/{owner_repo}/main/imager/icon.png',
+    'website': repo_url,
+    'url': f'{repo_url}/releases/download/v{version}/{os.path.basename(image)}',
+    'extract_size': int(extract_size),
+    'extract_sha256': extract_sha256,
+    'image_download_size': os.path.getsize(image),
+    'image_download_sha256': download_sha256,
+    'release_date': date,
+    'init_format': 'none',
+    'architecture': 'armv8',
+    'devices': ['pi5-64bit', 'pi4-64bit'],
+    'capabilities': [],
+}
+with open(out, 'w') as f:
+    json.dump({'imager': imager, 'os_list': [entry]}, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+EOF
 log "release files for $VERSION in $REL:"
 ls -l $REL
+print "Commit imager/os_list.json with the release: Raspberry Pi Imager reads it from the repository."

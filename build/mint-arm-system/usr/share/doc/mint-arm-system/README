@@ -8,6 +8,10 @@ virtual machine. What Linux Mint's setup wizard still needs goes right after it
 (mint-arm-first-start-late.service). The journal has their output
 (journalctl -u mint-arm-first-start -u mint-arm-first-start-late).
 
+Ubuntu's generic kernel installs without the device trees of physical ARM boards, which
+virtual machines never use (/etc/dpkg/dpkg.cfg.d/mint-arm-board-device-trees); the Raspberry
+Pi kernel keeps its own.
+
 This is not an official Linux Mint release. Ubuntu packages come from ports.ubuntu.com,
 Firefox from packages.mozilla.org, and Linux Mint's own packages were rebuilt for arm64
 from Linux Mint's published source packages.

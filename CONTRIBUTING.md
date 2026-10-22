@@ -10,18 +10,20 @@ cd Mint-ARM
 ./build.sh
 ```
 
-[Building it yourself](docs/building.md) covers the requirements, the stages, how to change what goes in, and testing. A first build takes about 40 minutes on an M4 Max; after a change, `./build.sh` again takes about 13 minutes, because the rebuilt Linux Mint packages are kept in `work/`.
+[Building it yourself](docs/building.md) covers the requirements, the stages, how to change what goes in, and testing. A first build takes about 45 minutes on an M4 Max; after a change, `./build.sh` again takes about 25 minutes, because the rebuilt Linux Mint packages are kept in `work/`.
 
 ## Layout
 
 | File | What it is |
 | --- | --- |
-| `build.sh` | the one command: starts the build VM, runs the stages in it, copies the image out, makes the UTM VM |
+| `build.sh` | the one command: starts the build VM, runs the stages in it, copies the image and the ISO out, makes the UTM VM |
+| `install.sh` | the one-command install of the ready-made VM on a Mac: UTM if missing, the download, its checksum, UTM |
 | `build/00-build-vm.sh` | stage 00, on the Mac: the Ubuntu 24.04 ARM64 build VM (QEMU, Apple's hypervisor, cloud-init) |
 | `build/10-packages.sh` | stage 10: rebuilds Linux Mint's compiled packages for ARM64; fetches its architecture-independent ones |
 | `build/15-mintarm.sh` | stage 15: the patched Software Sources and Update Manager, the settings packages, the `firefox-locale-*` transition packages |
-| `build/20-rootfs.sh` | stage 20: the system with both machines' halves, the local archive (`mint-arm-repo`), the first-start setup |
+| `build/20-rootfs.sh` | stage 20: the system with both machines' halves, the local archive (`mint-arm-repo`), the first-start setup; the ISO's live system; identical files stored once |
 | `build/30-image.sh` | stage 30: the image (for a Pi and for VMs), the UTM VM's disk, and the SSH test image |
+| `build/35-iso.sh` | stage 35: the live/install ISO for virtual machines |
 | `build/40-vm-image.sh` | stage 40, on the Mac: the UTM package |
 | `build/lib.sh` | helpers shared by the stages that run in the build VM |
 | `build/packages.conf`, `build/roots.txt` | what goes into the system, and what the first start removes on each machine (see [building](docs/building.md#5-changing-what-goes-in)) |
@@ -37,7 +39,8 @@ cd Mint-ARM
 | `tools/testpi.sh`, `tools/pi-boot-files.py` | the image in QEMU on the Mac as a Raspberry Pi starts it, on its own Raspberry Pi kernel |
 | `tools/pitest.sh` | checks, screenshots and a shell on the SSH test image, on a real Pi or in `testpi.sh` |
 | `tools/plan.py` | what a Linux Mint release needs rebuilt, in which order, and `roots.txt` |
-| `tools/make-release.sh`, `tools/source-manifest.py` | release files, with the source list and Linux Mint's sources |
+| `tools/make-release.sh`, `tools/source-manifest.py` | release files, with the source list and Linux Mint's sources, and Raspberry Pi Imager's list |
+| `imager/os_list.json`, `imager/icon.png` | Raspberry Pi Imager's list with this project's image (written by `make-release.sh`), and its icon |
 
 [How it works](docs/architecture.md) explains each stage.
 

@@ -4,37 +4,43 @@
 # packages.conf. One system for the Raspberry Pi and for virtual machines: it carries both
 # machines' kernels and boot tools, and its first start removes the half it does not use
 # (mint-arm-system's first-start service). It is prepared for Linux Mint's first-start setup the
-# way Mint's installer prepares an OEM installation. Runs after 10-packages.sh and 15-mintarm.sh;
-# 30-image.sh makes the disk images.
+# way Mint's installer prepares an OEM installation. A copy taken before that, for virtual
+# machines only and with the live session and Linux Mint's installer, becomes the ISO's live
+# system in $W/rootfs-live. Identical files under /usr end up stored once (hard links).
+# Runs after 10-packages.sh and 15-mintarm.sh; 30-image.sh makes the disk images, 35-iso.sh the ISO.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/lib.sh"
 R=$W/rootfs
+LIVE=$W/rootfs-live
 L=$W/logs/rootfs   # log file prefix
 UBUNTU_MIRROR=${UBUNTU_MIRROR:-http://ports.ubuntu.com/ubuntu-ports}
 SUITE=noble
 MANIFEST=$HERE/mint-22.3-cinnamon-amd64.manifest
 REPO_FILE_LIMIT=3000000      # arch:all Mint debs above this size stay out of the local archive
 
-in_root() {
-  sudo chroot "$R" /usr/bin/env -i HOME=/root TERM=dumb LANG=C.UTF-8 \
+chroot_in() {   # ROOT COMMAND...
+  local root=$1; shift
+  sudo chroot "$root" /usr/bin/env -i HOME=/root TERM=dumb LANG=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin DEBIAN_FRONTEND=noninteractive "$@"
 }
+in_root() { chroot_in "$R" "$@"; }
+in_live() { chroot_in "$LIVE" "$@"; }
 APT=(apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
      -o APT::Install-Recommends=false)
 
-mount_all() {
-  local d
-  for d in dev dev/pts proc sys; do mountpoint -q "$R/$d" || sudo mount --bind "/$d" "$R/$d"; done
-  mountpoint -q "$R/run" || sudo mount -t tmpfs -o mode=755 tmpfs "$R/run"
-  sudo mkdir -p "$R/mnt/mintarm-repo"
-  mountpoint -q "$R/mnt/mintarm-repo" || sudo mount --bind "$W/repo" "$R/mnt/mintarm-repo"
+mount_all() {   # [ROOT]
+  local root=${1:-$R} d
+  for d in dev dev/pts proc sys; do mountpoint -q "$root/$d" || sudo mount --bind "/$d" "$root/$d"; done
+  mountpoint -q "$root/run" || sudo mount -t tmpfs -o mode=755 tmpfs "$root/run"
+  sudo mkdir -p "$root/mnt/mintarm-repo"
+  mountpoint -q "$root/mnt/mintarm-repo" || sudo mount --bind "$W/repo" "$root/mnt/mintarm-repo"
 }
-umount_all() {
-  local d
+umount_all() {   # [ROOT]
+  local root=${1:-$R} d
   for d in mnt/mintarm-repo run sys proc dev/pts dev; do
-    if mountpoint -q "$R/$d"; then sudo umount "$R/$d" 2>/dev/null || sudo umount -l "$R/$d"; fi
+    if mountpoint -q "$root/$d"; then sudo umount "$root/$d" 2>/dev/null || sudo umount -l "$root/$d"; fi
   done
 }
 
@@ -42,7 +48,9 @@ umount_all() {
 # system. (--one-file-system: never descend into a mount left behind by an interrupted run.)
 bootstrap() {
   umount_all
-  sudo rm -rf --one-file-system "$R"
+  umount_all "$LIVE"
+  sudo rm -rf --one-file-system "$R" "$LIVE"
+  : > "$L-initramfs.log"
   log "debootstrap $SUITE arm64"
   sudo debootstrap --arch=arm64 --components=main,restricted,universe,multiverse \
     "$SUITE" "$R" "$UBUNTU_MIRROR" > "$W/logs/debootstrap.log" 2>&1
@@ -206,39 +214,98 @@ first_start() {
   in_root passwd -l oem > /dev/null
   in_root oem-config-prepare --quiet
   sudo install -d "$R/var/lib/mint-arm" && sudo touch "$R/var/lib/mint-arm/first-start-pending"
-  # the initrds as the system now stands (made, for a kernel that went in before initramfs-tools)
-  local kver
-  : > "$L-initramfs.log"
-  for kver in $(in_root linux-version list); do
-    if [ -e "$R/boot/initrd.img-$kver" ]; then
-      in_root update-initramfs -u -k "$kver" >> "$L-initramfs.log" 2>&1
-    else
-      in_root update-initramfs -c -k "$kver" >> "$L-initramfs.log" 2>&1
-    fi
-  done
+  make_initrds "$R"
   log "first start: $(wc -l < "$W/live-only.txt") live-only packages removed${extra:+ (with them: $extra)}, oem-config prepared"
 }
 
-finish() {
-  sudo rm -f "$R/etc/apt/sources.list.d/zz-mintarm-build.list" "$R/etc/apt/preferences.d/zz-mintarm-build.pref"
-  in_root apt-get -q update > /dev/null 2>&1 || true
-  # expected here: only Mint's large artwork packages (themes, icons, wallpapers), which the
-  # local archive leaves out because no Ubuntu package competes with them
-  log "installed without an apt source:$(in_root apt list --installed 2>/dev/null | grep ',local\]' | cut -d/ -f1 | xargs)"
-  in_root apt-get clean
-  sudo rm -f "$R/usr/sbin/policy-rc.d" "$R/etc/resolv.conf"
-  sudo ln -s ../run/systemd/resolve/stub-resolv.conf "$R/etc/resolv.conf"
-  : | sudo tee "$R/etc/machine-id" > /dev/null
-  sudo rm -f "$R/var/lib/dbus/machine-id"
-  sudo rm -rf "$R"/tmp/* "$R"/var/tmp/* "$R"/var/cache/apt/*.bin "$R"/var/lib/apt/lists/*_* "$R"/root/.bash_history
-  sudo rmdir "$R"/root/.cache "$R"/root/.ssh 2>/dev/null || true
-  sudo find "$R/var/log" -type f -delete
-  sudo rm -f "$R"/var/lib/dpkg/*-old "$R"/var/cache/debconf/*-old
-  in_root dpkg-query -W --showformat='${Package}\t${Version}\n' > "$W/filesystem.manifest"
-  log "rootfs ready: $(wc -l < "$W/filesystem.manifest") packages, $(sudo du -shx --exclude=mintarm-repo "$R" | cut -f1)"
+make_initrds() {   # ROOT: the initrds as the system now stands (made, for a kernel that went in before initramfs-tools)
+  local root=$1 kver
+  for kver in $(chroot_in "$root" linux-version list); do
+    if [ -e "$root/boot/initrd.img-$kver" ]; then
+      chroot_in "$root" update-initramfs -u -k "$kver" >> "$L-initramfs.log" 2>&1
+    else
+      chroot_in "$root" update-initramfs -c -k "$kver" >> "$L-initramfs.log" 2>&1
+    fi
+  done
 }
 
-trap umount_all EXIT
+# The ISO's live system (35-iso.sh), copied from the system as it stands before its first start is
+# prepared: for virtual machines only (the first start's own removal, run here for a VM), with the
+# live session and Linux Mint's installer, which the image's system loses next.
+live_system() {
+  umount_all
+  sudo rsync -aHAXx --numeric-ids "$R/" "$LIVE/"
+  mount_all
+  mount_all "$LIVE"
+  in_live env MINT_ARM_PLATFORM=vm MINT_ARM_FIRST_START=packages /usr/lib/mint-arm/first-start > "$L-live.log" 2>&1 \
+    || { tail -20 "$L-live.log"; return 1; }
+  # the live session and Linux Mint's installer, which the system itself never needs (pruning
+  # removed Ubiquity, and packages.conf leaves casper out). Linux Mint keeps casper on the installed
+  # system, with localechooser-data to stand in for the installer it removes. lvm2, which pruning
+  # removed along with Ubiquity, is for the installer's LVM and encryption options, as on Linux
+  # Mint's ISO.
+  in_live "${APT[@]}" install casper localechooser-data ubiquity ubiquity-casper ubiquity-frontend-gtk ubiquity-ubuntu-artwork \
+    lvm2 >> "$L-live.log" 2>&1 || { grep -E '^(E:| )' "$L-live.log" | tail -20; return 1; }
+  sudo rmdir "$LIVE/boot/firmware" 2> /dev/null || true
+  make_initrds "$LIVE"
+  installer_media
+  log "live system: $(chroot_in "$LIVE" dpkg-query -W -f '${Package}\n' | wc -l) packages, the Raspberry Pi's half removed"
+}
+
+# What the installer needs from the ISO: the packages it removes from the installed system (Mint's
+# own list, as installed in the live system) and an offline pool with what an OEM installation puts
+# back on it (oem-config and the parts of Ubiquity it uses).
+installer_media() {
+  chroot_in "$LIVE" dpkg-query -W -f '${Package}\n' | sort -u > "$W/live-installed.names"
+  sed 's/:.*//' "$HERE/mint-22.3-cinnamon-amd64.manifest-remove" | sort -u \
+    | grep -v -E '^(grub-efi-|shim-signed)' | comm -12 - "$W/live-installed.names" > "$W/filesystem.manifest-remove"
+  # Ubiquity installs oem-config-gtk in OEM mode; ask apt what that downloads on the installed
+  # system, i.e. this package database minus the live-only packages.
+  python3 - "$W/filesystem.manifest-remove" "$LIVE/var/lib/dpkg/status" <<'EOF' | sudo tee "$LIVE/tmp/status.target" > /dev/null
+import sys
+drop = {line.strip() for line in open(sys.argv[1]) if line.strip()}
+for stanza in open(sys.argv[2]).read().split('\n\n'):
+    if stanza.strip() and stanza.split('\n', 1)[0].split(': ', 1)[-1] not in drop:
+        sys.stdout.write(stanza.strip('\n') + '\n\n')
+EOF
+  local get
+  get=$(in_live apt-get -s -o Dir::State::status=/tmp/status.target install --no-install-recommends oem-config-gtk \
+        | awk '/^Inst /{print $2}')
+  sudo rm -f "$LIVE/tmp/status.target"
+  rm -rf "${W:?}/pool" && mkdir -p "$W/pool"
+  sudo rm -rf "$LIVE/tmp/pool" && sudo mkdir -p "$LIVE/tmp/pool"
+  # shellcheck disable=SC2086
+  in_live sh -c "cd /tmp/pool && apt-get -q download $(echo $get)" > "$W/logs/pool.log" 2>&1
+  cp "$LIVE"/tmp/pool/*.deb "$W/pool/" && sudo rm -rf "$LIVE/tmp/pool"
+  log "installer: removes $(wc -l < "$W/filesystem.manifest-remove") live-only packages, pool of $(ls "$W/pool" | wc -l)"
+}
+
+finish() {   # ROOT
+  local root=$1
+  sudo rm -f "$root/etc/apt/sources.list.d/zz-mintarm-build.list" "$root/etc/apt/preferences.d/zz-mintarm-build.pref"
+  chroot_in "$root" apt-get -q update > /dev/null 2>&1 || true
+  # expected here: only Mint's large artwork packages (themes, icons, wallpapers), which the
+  # local archive leaves out because no Ubuntu package competes with them
+  [ "$root" != "$R" ] || log "installed without an apt source:$(in_root apt list --installed 2>/dev/null | grep ',local\]' | cut -d/ -f1 | xargs)"
+  chroot_in "$root" apt-get clean
+  sudo rm -f "$root/usr/sbin/policy-rc.d" "$root/etc/resolv.conf"
+  sudo ln -s ../run/systemd/resolve/stub-resolv.conf "$root/etc/resolv.conf"
+  : | sudo tee "$root/etc/machine-id" > /dev/null
+  sudo rm -f "$root/var/lib/dbus/machine-id"
+  sudo rm -rf "$root"/tmp/* "$root"/var/tmp/* "$root"/var/cache/apt/*.bin "$root"/var/lib/apt/lists/*_* "$root"/root/.bash_history
+  sudo rmdir "$root"/root/.cache "$root"/root/.ssh 2>/dev/null || true
+  sudo find "$root/var/log" -type f -delete
+  sudo rm -f "$root"/var/lib/dpkg/*-old "$root"/var/cache/debconf/*-old
+}
+
+# Identical files under /usr (icons shared by several themes, the same data in several packages)
+# stored once, as hard links, when they have the same owner, mode and extended attributes. When a
+# package update replaces one, dpkg writes it as a file of its own, so updates are not affected.
+dedupe() {   # ROOT NAME
+  log "$2: identical files stored once:$(sudo hardlink -t -X "$1/usr" 2>&1 | grep -E '^(Linked|Saved):' | sed 's/  */ /g' | xargs)"
+}
+
+trap 'umount_all; umount_all "$LIVE"' EXIT
 bootstrap
 mount_all
 configure_apt
@@ -246,5 +313,11 @@ install_packages
 prune
 configure_system
 make_repo_package
+live_system
 first_start
-finish
+finish "$R"
+finish "$LIVE"
+dedupe "$R" "the system"
+dedupe "$LIVE" "the live system"
+in_root dpkg-query -W --showformat='${Package}\t${Version}\n' > "$W/filesystem.manifest"
+log "rootfs ready: $(wc -l < "$W/filesystem.manifest") packages, $(sudo du -shx --exclude=mintarm-repo "$R" | cut -f1); live system $(sudo du -shx --exclude=mintarm-repo "$LIVE" | cut -f1)"

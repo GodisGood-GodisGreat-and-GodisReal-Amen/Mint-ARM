@@ -2,3 +2,4 @@
 /etc/apt/sources.list.d/mozilla.list
 /etc/apt/preferences.d/mozilla-firefox.pref
 /etc/apt/preferences.d/mint-arm-nosnap.pref
+/etc/dpkg/dpkg.cfg.d/mint-arm-board-device-trees

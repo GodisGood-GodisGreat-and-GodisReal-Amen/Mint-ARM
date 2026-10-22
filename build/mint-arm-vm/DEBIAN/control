@@ -1,5 +1,5 @@
 Package: mint-arm-vm
-Version: 22.3.6
+Version: 22.3.7
 Architecture: all
 Maintainer: Linux Mint ARM local build <mint-arm@localhost>
 Recommends: spice-vdagent, qemu-guest-agent
@@ -14,3 +14,8 @@ Description: Linux Mint ARM64 settings for virtual machines on Apple silicon
     loses Firefox's text when Firefox draws with it
   - Apple Rosetta for x86-64 Linux programs when the VM runs under Apple's
     Virtualization framework with Rosetta sharing enabled
+  - the QEMU guest agent keeps running when Linux Mint's setup wizard hands over to the
+    desktop, instead of stopping until the next start
+  - the kernel's console is the VM's screen (console=tty1), not the serial port that the
+    VM's firmware names: the start-up splash shows, and an encrypted system asks for its
+    passphrase on the screen

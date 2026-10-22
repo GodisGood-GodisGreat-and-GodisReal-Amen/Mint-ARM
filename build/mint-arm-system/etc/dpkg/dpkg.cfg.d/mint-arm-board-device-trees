@@ -1,0 +1,5 @@
+# Linux Mint ARM: Ubuntu's generic kernel brings the device trees of hundreds of physical ARM
+# boards, about 100 MB. Virtual machines take theirs from the firmware, and a Raspberry Pi uses
+# its own kernel's (-raspi), which stay: flash-kernel puts them on the Pi's boot partition.
+path-exclude=/lib/firmware/*-generic/device-tree/*
+path-exclude=/usr/lib/firmware/*-generic/device-tree/*

@@ -9,9 +9,11 @@
 # system updated from an earlier release never runs it.
 #   MINT_ARM_PLATFORM=pi|vm, or mint-arm.platform=pi|vm on the kernel command line, decides the
 #   machine instead of the detection: for tests, and for the build, which prepares the UTM VM so.
+#   MINT_ARM_FIRST_START=packages removes the packages only, pending or not, and leaves the boot
+#   partition alone: for the build, which makes the ISO's live system so.
 set -u
 PENDING=/var/lib/mint-arm/first-start-pending
-[ -e "$PENDING" ] || exit 0
+[ -e "$PENDING" ] || [ "${MINT_ARM_FIRST_START:-}" = packages ] || exit 0
 export DEBIAN_FRONTEND=noninteractive
 APT="apt-get -y -q -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef"
 in_chroot=
@@ -53,10 +55,28 @@ for round in 1 2 3 4 5 6 7 8; do
   removable="$kept "
 done
 
+# One apt run, and what it would redo at every dpkg pass done once: in a virtual machine, removing
+# the Raspberry Pi's boot tools and firmware has initramfs-tools rebuild the initrd after the
+# removal and again after the purge, so its automatic updates are off meanwhile and the initrd is
+# built once at the end. man-db would rebuild its whole manual index; its daily timer does that.
+mandb_on=/var/lib/man-db/auto-update
+initramfs_conf=/etc/initramfs-tools/update-initramfs.conf
+# what an interrupted run left switched off comes back first
+[ ! -e "$mandb_on.mint-arm" ] || mv "$mandb_on.mint-arm" "$mandb_on"
+[ ! -e "$initramfs_conf.mint-arm" ] || mv "$initramfs_conf.mint-arm" "$initramfs_conf"
 if [ -n "${removable# }" ]; then
   echo "removing:${removable% }"
+  [ ! -e "$mandb_on" ] || mv "$mandb_on" "$mandb_on.mint-arm"
+  if [ "$platform" = vm ] && [ -f "$initramfs_conf" ]; then
+    sed -i.mint-arm 's/^update_initramfs=.*/update_initramfs=no/' "$initramfs_conf"
+  fi
   # shellcheck disable=SC2086
-  $APT --allow-remove-essential purge $removable && $APT --purge autoremove
+  $APT --allow-remove-essential purge --autoremove $removable
+  [ ! -e "$mandb_on.mint-arm" ] || mv "$mandb_on.mint-arm" "$mandb_on"
+  if [ -e "$initramfs_conf.mint-arm" ]; then
+    mv "$initramfs_conf.mint-arm" "$initramfs_conf"
+    update-initramfs -u
+  fi
 fi
 # Packages of the list removed with their settings left behind (the setup wizard removes itself,
 # and what only it needed, so): their settings go too.
@@ -64,6 +84,7 @@ fi
 leftover=$(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' $patterns 2> /dev/null | awk '$1 == "rc" {print $2}')
 # shellcheck disable=SC2086
 [ -z "$leftover" ] || $APT purge $leftover
+[ "${MINT_ARM_FIRST_START:-}" != packages ] || exit 0
 
 set +f
 # The boot partition holds both machines' boot files until now.
