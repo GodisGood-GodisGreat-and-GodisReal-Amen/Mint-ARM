@@ -1,5 +1,5 @@
 Package: mint-arm-system
-Version: 22.3.7
+Version: 22.3.8
 Architecture: all
 Maintainer: Linux Mint ARM local build <mint-arm@localhost>
 Depends: systemd-zram-generator, mint-arm-vm | mint-arm-pi

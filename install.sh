@@ -120,7 +120,7 @@ else
 fi
 CACHE=$HOME/Library/Caches/mint-arm-installer
 mkdir -p $CACHE
-say "Downloading Linux Mint ARM ${TAG#v} (about 1.75 GB; if it stops, running this again resumes it)"
+say "Downloading Linux Mint ARM ${TAG#v} (about 1.73 GB; if it stops, running this again resumes it)"
 curl -fL --retry 3 -C - -# -o $CACHE/$TAG-$ZIP "$BASE/$ZIP" || fail "the download stopped; run this again to resume it"
 curl -fsSL --retry 3 -o $CACHE/$TAG-SHA256SUMS "$BASE/SHA256SUMS" || fail "could not download SHA256SUMS"
 say "Checking it against the release's SHA256SUMS"

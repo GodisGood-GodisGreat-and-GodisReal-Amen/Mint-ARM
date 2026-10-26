@@ -127,10 +127,10 @@ UTM's *GPU Supported* display is a `virtio-gpu-gl-pci` card: Mesa's VirGL driver
 
 On an M4 Max with the virtual hardware of the ready-made VM (6 cores, 8 GB, QEMU on Apple's hypervisor):
 
-| | 1.2.0 | 1.1.0 |
+| | 1.2.1 | 1.1.0 |
 | --- | --- | --- |
 | The image | 1.41 GB compressed (`.img.xz`), 6.80 GB written out | 1.46 GB, 7.12 GB |
-| The ready-made VM | 1.75 GB zipped | 1.82 GB |
+| The ready-made VM | 1.73 GB zipped | 1.82 GB |
 | The ISO | 1.60 GB | (none) |
 | Installed in the VM, after Linux Mint's setup and Update Manager's first refresh | 4.25 GB of files, plus the 2 GB swap file | 4.67 GB |
 | Packages installed in the VM (Linux Mint on x86: 2,005) | about 1,580 | about 1,580 |

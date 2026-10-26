@@ -3,9 +3,12 @@ Linux Mint ARM (unofficial arm64 build of Linux Mint 22.3 "Zena" Cinnamon): virt
 What only virtual machines use (the system's first start removes this package on a Raspberry
 Pi). Firefox renders in software (/usr/lib/firefox/defaults/pref/mint-arm-vm.js), and the
 mint-arm-rosetta service registers Apple's Rosetta for x86-64 Linux programs when the VM runs
-under Apple's Virtualization framework with Rosetta sharing enabled. A drop-in for
-qemu-guest-agent.service (qemu-guest-agent.service.d/mint-arm.conf) keeps the QEMU guest agent
-running when Linux Mint's setup wizard switches to the desktop. /etc/default/grub.d/mint-arm-vm.cfg
-makes the VM's screen the kernel's console (console=tty1) instead of the serial port that the
-firmware of QEMU's and UTM's virtual machines names, so that the start-up splash shows and an
-encrypted system asks for its passphrase on the screen.
+under Apple's Virtualization framework with Rosetta sharing enabled. Drop-ins for
+qemu-guest-agent.service, spice-vdagentd.socket and spice-vdagentd.service (mint-arm.conf in
+each unit's .d folder) keep the QEMU guest agent and the SPICE agent's daemon running when
+Linux Mint's setup wizard switches to the desktop. On a system with an encrypted
+disk, /etc/default/grub.d/mint-arm-vm.cfg makes the VM's screen the kernel's console
+(console=tty1) instead of the serial port that the firmware of QEMU's and UTM's virtual
+machines names, so that the passphrase prompt shows on the screen; other systems keep the
+firmware's console, which starts them about 0.15 s sooner. After encrypting a disk later, run
+"sudo update-grub" once.

@@ -214,8 +214,8 @@ Four packages carry everything this build changes (`apt show mint-arm-system min
 | --- | --- |
 | `/usr/lib/firefox/defaults/pref/mint-arm-vm.js` | Firefox renders in software ([display](#3-the-display)) |
 | `/usr/lib/mint-arm/rosetta-setup`, `mint-arm-rosetta.service` | Rosetta, under Apple's Virtualization framework |
-| `qemu-guest-agent.service.d/mint-arm.conf` | the QEMU guest agent keeps running when Linux Mint's setup wizard hands over to the desktop |
-| `/etc/default/grub.d/mint-arm-vm.cfg` | the kernel's console is the VM's screen (`console=tty1`), as on a PC: the start-up splash shows, and an encrypted system asks for its passphrase there. Without it, the firmware of QEMU's and UTM's virtual machines names their serial port as the console |
+| `qemu-guest-agent.service.d/mint-arm.conf`, `spice-vdagentd.socket.d/mint-arm.conf`, `spice-vdagentd.service.d/mint-arm.conf` | the QEMU guest agent and the SPICE agent's daemon (clipboard sharing, automatic resizing) keep running when Linux Mint's setup wizard hands over to the desktop |
+| `/etc/default/grub.d/mint-arm-vm.cfg` | on a system with an encrypted disk, the kernel's console is the VM's screen (`console=tty1`), as on a PC, so that the passphrase prompt at each start shows there; otherwise the firmware of QEMU's and UTM's virtual machines names their serial port as the console. Other systems keep that console, which starts them about 0.15 s sooner (no start-up splash). After encrypting a disk later, run `sudo update-grub` once |
 
 `mint-arm-pi` keeps the Raspberry Pi's boot chain installed (the kernel, `flash-kernel`, the Pi's firmware and Ubuntu's Raspberry Pi desktop settings) and adds `/usr/lib/netplan/00-mint-arm-network-manager.yaml`, which lets NetworkManager manage wired connections as on Linux Mint, and `/usr/lib/NetworkManager/conf.d/zz-mint-arm-wifi-powersave-off.conf`, which turns Wi-Fi power saving off ([section 14](#14-raspberry-pi)).
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 — 2026-10-26
+
+- **Virtual machines start as fast as with 1.1.0 again**, about 0.15 s sooner than with 1.2.0: the VM's screen is the kernel's console only on a system with an encrypted disk now, where the passphrase prompt needs it. Elsewhere that console brought Linux Mint's start-up splash, which slowed the start of D-Bus. A VM updated from 1.2.0 gets this with the update (`mint-arm-system` and `mint-arm-vm` 22.3.8). The ISO's live session keeps the screen console, for its own prompts (such as the request to remove the disc when it restarts).
+- **Clipboard sharing and automatic resizing work right after Linux Mint's setup** in UTM: the SPICE agent's daemon stopped when the setup wizard handed over to the desktop and stayed stopped until the next start, as the QEMU guest agent did before 1.2.0.
+
 ## 1.2.0 — 2026-10-26
 
 - **Installed with one command on a Mac.** One line in Terminal ([`install.sh`](install.sh)) checks the Mac, installs UTM if it is missing (after asking; from UTM's developer, and only if Apple's notarization check passes), downloads the latest release's virtual machine, checks it against the release's checksums, puts it in the *Virtual Machines* folder of your home folder and opens it in UTM.
