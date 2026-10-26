@@ -23,6 +23,7 @@ cd Mint-ARM
 | `build/15-mintarm.sh` | stage 15: the patched Software Sources and Update Manager, the settings packages, the `firefox-locale-*` transition packages |
 | `build/20-rootfs.sh` | stage 20: the system with both machines' halves, the local archive (`mint-arm-repo`), the first-start setup; the ISO's live system; identical files stored once |
 | `build/30-image.sh` | stage 30: the image (for a Pi and for VMs), the UTM VM's disk, and the SSH test image |
+| `build/qcow2-zstd.py` | stage 30: writes the UTM VM's disk as a compressed qcow2 with zstd at level 12 (qemu-img's level is fixed at 3) |
 | `build/35-iso.sh` | stage 35: the live/install ISO for virtual machines |
 | `build/40-vm-image.sh` | stage 40, on the Mac: the UTM package |
 | `build/lib.sh` | helpers shared by the stages that run in the build VM |

@@ -41,7 +41,7 @@ It checks your Mac, offers to install UTM if it is missing (from its developer, 
 
 **By hand:**
 
-1. **Download** `linuxmint-22.3-cinnamon-arm64-unofficial-utm.zip` (1.73 GB) from the [latest release](https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM/releases/latest). Take `SHA256SUMS` from the same page if you want to check the download.
+1. **Download** `linuxmint-22.3-cinnamon-arm64-unofficial-utm.zip` (1.66 GB) from the [latest release](https://github.com/GodisGood-GodisGreat-and-GodisReal-Amen/Mint-ARM/releases/latest). Take `SHA256SUMS` from the same page if you want to check the download.
 2. **Check it** (optional). In Terminal, in the folder you downloaded to:
 
    ```bash

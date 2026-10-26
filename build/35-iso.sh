@@ -44,9 +44,13 @@ manifests() {
 
 squashfs() {
   log "squashfs ($SQUASHFS_COMP)"
-  local opts=(-comp "$SQUASHFS_COMP" -b 1M -noappend -no-progress -wildcards -e 'mnt/mintarm-repo')
-  [ "$SQUASHFS_COMP" = zstd ] && opts+=(-Xcompression-level 19)
+  local opts=(-comp "$SQUASHFS_COMP" -b 1M -noappend -no-progress -wildcards)
+  # zstd level 15: levels 16 to 19 make the live system 2 to 6 % smaller, but Linux reads them
+  # back 2 to 6 % more slowly (measured), and the live session and the installer read all of it
+  [ "$SQUASHFS_COMP" = zstd ] && opts+=(-Xcompression-level 15)
   [ "$SQUASHFS_COMP" = xz ] && opts+=(-Xbcj arm64)
+  # -e last: mksquashfs takes every argument after it as one more path to leave out
+  opts+=(-e 'mnt/mintarm-repo')
   sudo mksquashfs "$R" "$IMG/casper/filesystem.squashfs" "${opts[@]}" > "$W/logs/mksquashfs.log"
   sudo chown "$(id -u):$(id -g)" "$IMG/casper/filesystem.squashfs"
 }

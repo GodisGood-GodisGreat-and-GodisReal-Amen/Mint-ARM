@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.2 — 2026-10-27
+
+- **A smaller virtual machine, as fast as before.** The ready-made virtual machine is a 1.66 GB download instead of 1.73, and takes 76 MB less room on the Mac. Its disk is still compressed in 64 KiB blocks, each on its own so that the VM reads any of them directly, but with zstd at level 12 instead of QEMU's fixed level 3; zstd also decompresses level 12 a little faster. Measured against 1.2.1 on the same Mac, the VM brings up Linux Mint's setup and reads its files at least as fast. Each build compares the VM's disk, block by block, with the uncompressed one.
+- **The ISO keeps its size and speed** (1.60 GB). The build asked for zstd's level 19 for its live system but, through an option in the wrong place, got level 15. Measured, level 19 would make the ISO 94 MB smaller, but the live session would read its files 8 % more slowly and an installation would take 4 % longer, so level 15 is now chosen on purpose.
+- **Nothing to update on a system made from 1.2.1**: Linux Mint ARM's own packages are unchanged (22.3.8). Update Manager brings it Ubuntu's security update of the Brotli compression library, which this release already includes. The image is the same size (1.41 GB).
+
 ## 1.2.1 — 2026-10-26
 
 - **Virtual machines start as fast as with 1.1.0 again**, about 0.15 s sooner than with 1.2.0: the VM's screen is the kernel's console only on a system with an encrypted disk now, where the passphrase prompt needs it. Elsewhere that console brought Linux Mint's start-up splash, which slowed the start of D-Bus. A VM updated from 1.2.0 gets this with the update (`mint-arm-system` and `mint-arm-vm` 22.3.8). The ISO's live session keeps the screen console, for its own prompts (such as the request to remove the disc when it restarts).

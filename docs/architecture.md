@@ -94,13 +94,13 @@ A Pi's firmware reads `config.txt`, then loads the kernel, the initrd and the bo
 
 The image is then checked (partitions and labels; the Pi's firmware, kernel and initrd matching the installed ones, every board's device tree; shim and GRUB, and a GRUB entry for the VM kernel; both initrds' file system check, the growing step; fstab; the first-start target and marker; the locked `oem` account; an empty machine ID; no SSH server, host keys or keys), its free blocks trimmed into holes, and compressed with `xz -9` and a 384 MiB window instead of 64, which reaches the files that are alike but far apart in the image: some 60 MB less to download, for ten minutes more of compression and 385 MB of memory to unpack it (refused over 2 GB, GitHub's limit for a release file).
 
-**The UTM VM's disk** is a copy of the image grown to 64 GB (partition and file system), on which the first start's script runs for a virtual machine right there, so the VM carries no Raspberry Pi files; it is converted to a compressed qcow2 for stage 40.
+**The UTM VM's disk** is a copy of the image grown to 64 GB (partition and file system), on which the first start's script runs for a virtual machine right there, so the VM carries no Raspberry Pi files; it is converted to a compressed qcow2 for stage 40. `build/qcow2-zstd.py` writes it the way `qemu-img convert -c` does, each 64 KiB cluster compressed on its own with zstd, but at level 12 rather than qemu-img's fixed level 3: 4.5 % smaller, and no slower to read back: zstd decompresses levels 6 to 12 a little faster than level 3, while levels 15 and above, smaller still, decompress more slowly. `qemu-img check` and `qemu-img compare` against the raw disk then confirm it.
 
 With `--test-ssh`, another copy gets an SSH server for testing on a real Pi ([building](building.md#7-testing)); it is checked the same way, minus the SSH checks, and kept apart from the release files.
 
 ## Stage 35: the ISO
 
-`build/35-iso.sh` packs the live system the way Linux Mint's own ISO is laid out: `casper/filesystem.squashfs` (zstd, level 19), `filesystem.manifest` and `filesystem.manifest-remove` (what the installer removes from the installed system), the offline pool as an apt-cdrom archive, and a GRUB boot menu (*Start*, *compatibility mode*, *OEM install*) behind shim and Ubuntu's signed GRUB CD image. `xorriso` makes it bootable from an El Torito entry and an appended EFI partition, as UEFI firmware expects; it is refused over 2 GB. The installed system gets the virtual machines' half only, with GRUB on the disk Linux Mint's installer partitions.
+`build/35-iso.sh` packs the live system the way Linux Mint's own ISO is laid out: `casper/filesystem.squashfs` (zstd, level 15: levels 16 to 19 make it 2 to 6 % smaller, but Linux reads it back 2 to 6 % more slowly), `filesystem.manifest` and `filesystem.manifest-remove` (what the installer removes from the installed system), the offline pool as an apt-cdrom archive, and a GRUB boot menu (*Start*, *compatibility mode*, *OEM install*) behind shim and Ubuntu's signed GRUB CD image. `xorriso` makes it bootable from an El Torito entry and an appended EFI partition, as UEFI firmware expects; it is refused over 2 GB. The installed system gets the virtual machines' half only, with GRUB on the disk Linux Mint's installer partitions.
 
 ## The first start
 
@@ -127,10 +127,10 @@ UTM's *GPU Supported* display is a `virtio-gpu-gl-pci` card: Mesa's VirGL driver
 
 On an M4 Max with the virtual hardware of the ready-made VM (6 cores, 8 GB, QEMU on Apple's hypervisor):
 
-| | 1.2.1 | 1.1.0 |
+| | 1.2.2 | 1.1.0 |
 | --- | --- | --- |
 | The image | 1.41 GB compressed (`.img.xz`), 6.80 GB written out | 1.46 GB, 7.12 GB |
-| The ready-made VM | 1.73 GB zipped | 1.82 GB |
+| The ready-made VM | 1.66 GB zipped | 1.82 GB |
 | The ISO | 1.60 GB | (none) |
 | Installed in the VM, after Linux Mint's setup and Update Manager's first refresh | 4.25 GB of files, plus the 2 GB swap file | 4.67 GB |
 | Packages installed in the VM (Linux Mint on x86: 2,005) | about 1,580 | about 1,580 |
@@ -147,8 +147,8 @@ On a Raspberry Pi: not measured yet, as this release was not tested on a real Pi
 
 - The image as a virtual machine's disk (QEMU, UEFI): GRUB starts the VM kernel; the system grows to fill the disk; the first start removes the Raspberry Pi's half and moves the boot partition to `/boot/efi`; Linux Mint's setup runs and removes its temporary account; no failed systemd units; Update Manager offers no kernel change; a kernel update goes through GRUB.
 - The image as a Raspberry Pi starts it, in QEMU on its own Raspberry Pi kernel: the first start removes the virtual machines' half, in its two passes; the desktop starts; a kernel update goes onto the boot partition through `flash-kernel`.
-- The image on a real Raspberry Pi, through the SSH test image (not done for 1.1.0 or 1.2.0): the firmware starts it; the GPU draws the desktop; Wi-Fi, Bluetooth and sound find the Pi's hardware; the system grows to fill the card; a kernel update and a restart work.
-- The ready-made VM's first start runs Linux Mint's setup; every copy gets its own machine ID. The GPU-accelerated display works on UTM's own QEMU (virglrenderer and ANGLE onto Metal), with the SPICE agent running, and Firefox shows pages correctly.
+- The image on a real Raspberry Pi, through the SSH test image (not done yet): the firmware starts it; the GPU draws the desktop; Wi-Fi, Bluetooth and sound find the Pi's hardware; the system grows to fill the card; a kernel update and a restart work.
+- The ready-made VM's first start runs Linux Mint's setup; every copy gets its own machine ID. The GPU-accelerated display works on UTM's own QEMU (virglrenderer and ANGLE onto Metal), with the SPICE agent running, and Firefox shows pages correctly. Written to directly, as UTM runs it (the setup, new files, packages installed and removed, a trim), its disk stays consistent for `qemu-img check`, and every package's files read back intact.
 - Under Apple's Virtualization framework with Rosetta shared in, the image starts as a VM; with Ubuntu's 6.8 kernel, installed as the [manual](manual.md#8-rosetta-for-x86-64-programs) describes, x86-64 programs run.
 - The ISO starts the live session in a VM; Linux Mint's installer installs the system, plainly and encrypted (LVM in LUKS); it starts with no failed systemd units, the encrypted one once its passphrase is typed at the prompt on the VM's screen.
 - The one-command install, against the release's files: it finds UTM, or installs it after checking its signature and Apple's notarization; it checks the download against `SHA256SUMS` and unpacks the VM.
@@ -156,4 +156,4 @@ On a Raspberry Pi: not measured yet, as this release was not tested on a real Pi
 - A VM made from the previous release updates with the new `mint-arm-repo` package.
 - The images carry no traces of the machine that built them.
 
-Not tested yet: a real Raspberry Pi (1.1.0 and 1.2.0 were tested with the Pi's kernel in QEMU only), the VM inside UTM's own window (the same QEMU, virglrenderer and ANGLE were tested outside it; UTM's window only shows the result), VMware Fusion, Parallels Desktop, Secure Boot, and setups in languages other than English.
+Not tested yet: a real Raspberry Pi (every release so far was tested with the Pi's kernel in QEMU only), the VM inside UTM's own window (the same QEMU, virglrenderer and ANGLE were tested outside it; UTM's window only shows the result), VMware Fusion, Parallels Desktop, Secure Boot, and setups in languages other than English.

@@ -226,7 +226,11 @@ make_vm_disk() {
   sudo fstrim "$MNT/boot/firmware" 2> /dev/null || true
   sudo umount "$MNT/boot/firmware" && sudo rmdir "$MNT/boot/firmware"
   leave_image
-  qemu-img convert -c -O qcow2 -o compression_type=zstd "$vm" "$OUT/$NAME-vm.qcow2"
+  # a compressed qcow2 as qemu-img makes it, with zstd at level 12 instead of its fixed 3: smaller,
+  # and no slower to read back; then checked by qemu-img against the raw disk
+  python3 "$HERE/qcow2-zstd.py" --level 12 "$vm" "$OUT/$NAME-vm.qcow2"
+  qemu-img check -q "$OUT/$NAME-vm.qcow2" || { echo "the virtual machine's qcow2 is not consistent" >&2; exit 1; }
+  qemu-img compare -q "$vm" "$OUT/$NAME-vm.qcow2" || { echo "the virtual machine's qcow2 differs from its raw disk" >&2; exit 1; }
   (cd "$OUT" && sha256sum "$NAME-vm.qcow2" > "$NAME-vm.qcow2.sha256")
   rm -f "$vm"
   log "virtual machine's disk: $(du -h "$OUT/$NAME-vm.qcow2" | cut -f1) ($VM_DISK)"
