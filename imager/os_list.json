@@ -47,7 +47,7 @@
       "extract_sha256": "e6f75b4077ceaa4bc4d8a1684788268e33d9190dbf613e886ec6344cd29dd1c7",
       "image_download_size": 1414363136,
       "image_download_sha256": "10d4176f62d888cb9a54539d454c007c805683b2385a1bc09b7084201c8fc005",
-      "release_date": "2026-10-22",
+      "release_date": "2026-10-26",
       "init_format": "none",
       "architecture": "armv8",
       "devices": [

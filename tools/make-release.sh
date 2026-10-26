@@ -7,14 +7,15 @@
 #                                                      system made from an earlier release
 #   linuxmint-22.3-arm64-sources.tar                   Linux Mint's source packages for everything
 #                                                      compiled or patched for arm64, with the patches
-#   source-packages.tsv                                every source package in the image, its
-#                                                      version, and where its source lives
+#   source-packages.tsv                                every source package in the image and the
+#                                                      ISO, its version, and where its source lives
 #   SHA256SUMS
 # and, in the repository, imager/os_list.json: Raspberry Pi Imager's entry for this release's image
 # (its URL, sizes and SHA-256s), to commit along with the release.
 # The source list comes from the image itself: it starts headlessly in QEMU as testpi.sh starts it,
-# on a throwaway overlay, with its first start held back so that both its halves are still there;
-# it lists what is installed and downloads Mint's sources with apt, which checks them against
+# on a throwaway overlay, with its first start held back so that both its halves are still there,
+# and with the ISO attached as a read-only disk; it lists what the image, the ISO's live system and
+# the ISO's package pool hold, and downloads Mint's sources with apt, which checks them against
 # Linux Mint's signed index. The UTM VM's disk is that image with one half removed. A test image
 # (with SSH, from ./build.sh --test-ssh) is refused.
 #
@@ -49,7 +50,8 @@ rm -rf $REL && mkdir -p $REL/.stage/$SOURCES
 log "starting the image (its first start held back), on a throwaway overlay"
 TESTPI_DIR=$REL/.stage QGA_PORT=$QGA QMP_PORT=$QMP SSH_PORT=4472 SMP=4 MEM=6G CARD=16G \
   APPEND="mint-arm.first-start=no systemd.unit=multi-user.target" \
-  $HERE/testpi.sh vm $OUT/$IMAGE > $REL/.stage/vm.log 2>&1 &
+  $HERE/testpi.sh vm $OUT/$IMAGE -- -drive if=none,id=iso0,file=$OUT/$ISO,format=raw,readonly=on \
+  -device virtio-blk-pci,drive=iso0 > $REL/.stage/vm.log 2>&1 &
 vm=$!
 trap '$HERE/qmp.py $QMP cmd "{\"name\": \"quit\"}" > /dev/null 2>&1 || kill $vm 2> /dev/null || true' EXIT
 $HERE/qga.py $QGA ping 600
@@ -69,8 +71,14 @@ $HERE/qga.py $QGA run '
     sleep 10
   done
   ls /var/lib/apt/lists/*ports.ubuntu.com*_noble_main_binary-arm64_Packages* > /dev/null || { tail -5 /tmp/apt-update.log; exit 1; }
-  python3 /tmp/source-manifest.py --status /var/lib/dpkg --debs "/usr/share/mint-arm/repo/**/*.deb" \
-    > /tmp/source-packages.tsv
+  # the ISO: its live system (the squashfs) and the pool of packages that its installer can add
+  iso=$(blkid -t TYPE=iso9660 -o device | head -1)
+  [ -n "$iso" ] || { echo "the ISO is not attached"; exit 1; }
+  mkdir -p /mnt/iso /mnt/live
+  mount -o ro "$iso" /mnt/iso && mount -o ro,loop /mnt/iso/casper/filesystem.squashfs /mnt/live \
+    || { echo "cannot mount the ISO or its live system"; exit 1; }
+  python3 /tmp/source-manifest.py --status /var/lib/dpkg --status /mnt/live/var/lib/dpkg \
+    --debs "/usr/share/mint-arm/repo/**/*.deb" --debs "/mnt/iso/pool/**/*.deb" > /tmp/source-packages.tsv
   python3 /tmp/source-manifest.py --rebuilt /usr/share/mint-arm/repo > /tmp/rebuilt.txt
   echo "$(wc -l < /tmp/source-packages.tsv) source packages, $(wc -l < /tmp/rebuilt.txt) rebuilt or patched"' 900
 
@@ -98,7 +106,7 @@ Linux Mint ARM $VERSION: the source code of the Linux Mint packages built for ar
 
 This archive holds the Debian source packages (each .dsc and the files it lists) that the
 Linux Mint ARM build downloaded from packages.linuxmint.com and compiled for arm64, exactly as
-they went into the image (and the UTM virtual machine made from it). mintsources and
+they went into the image, the UTM virtual machine made from it, and the ISO. mintsources and
 mintupdate were also changed for arm64: the changes are the .patch files here, applied with
 "patch -p1" inside the unpacked source.
 

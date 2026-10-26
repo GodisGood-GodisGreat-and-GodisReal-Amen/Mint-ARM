@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.0 — 2026-10-22
+## 1.2.0 — 2026-10-26
 
 - **Installed with one command on a Mac.** One line in Terminal ([`install.sh`](install.sh)) checks the Mac, installs UTM if it is missing (after asking; from UTM's developer, and only if Apple's notarization check passes), downloads the latest release's virtual machine, checks it against the release's checksums, puts it in the *Virtual Machines* folder of your home folder and opens it in UTM.
 - **In Raspberry Pi Imager's list.** A content repository for Imager 2.0 and newer ([`imager/os_list.json`](imager/os_list.json)): Linux Mint ARM appears among the systems for the Pi 4 and Pi 5 families, and Imager downloads it, checks it and writes it.
